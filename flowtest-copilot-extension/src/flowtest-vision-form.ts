@@ -51,7 +51,7 @@ export async function openVisionForm(opts: {
 }): Promise<string | null> {
   const panel = vscode.window.createWebviewPanel(
     "flowtestVisionForm",
-    opts.title ?? "FlowTest: Vision Assertions",
+    opts.title ?? "FlowTest Vision Assertions",
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: false }
   );

@@ -52,7 +52,7 @@ export async function openMocksForm(opts: {
 }): Promise<string | null> {
   const panel = vscode.window.createWebviewPanel(
     "flowtestMocksForm",
-    opts.title ?? "FlowTest: Mocks Planner",
+    opts.title ?? "FlowTest Mocks Planner",
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: false }
   );

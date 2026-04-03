@@ -534,6 +534,11 @@ export class FlowtestStatusPanel {
       sectionDivider.style.display = (!rc && !tl) ? 'block' : 'none';
       runCenterSection.classList.remove('grow');
       timelineSection.classList.remove('grow');
+      if (rc && tl) {
+        runCenterSection.style.flex = '0 0 auto';
+        timelineSection.style.flex = '0 0 auto';
+        return;
+      }
       if (rc && !tl) {
         runCenterSection.style.flex = '0 0 auto';
         timelineSection.style.flex = '1 1 auto';

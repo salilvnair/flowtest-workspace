@@ -436,6 +436,18 @@ function aiRequestPreviewContent(preview: AiDispatchPreview): string {
   }, null, 2);
 }
 
+function aiDispatchDetail(preview: AiDispatchPreview, timeoutMs: number): string {
+  return [
+    `task=${preview.taskType}`,
+    `provider=${preview.provider}`,
+    `model=${preview.model}`,
+    "model_version=latest",
+    "temperature=default",
+    `timeout_ms=${timeoutMs}`,
+    `called_at=${preview.calledAt}`
+  ].join(" | ");
+}
+
 async function runScenarioOnEngine(scenarioObj: Record<string, unknown>): Promise<{ ok: boolean; status: number; body: string }> {
   const engineBaseUrl = vscode.workspace.getConfiguration("flowtest").get<string>("engineBaseUrl", "http://localhost:8080");
   const response = await fetch(`${engineBaseUrl}/api/scenarios/run`, {
@@ -545,7 +557,7 @@ async function handleStartCommand(
 ): Promise<vscode.ChatResult> {
   const intake = await openStartIntakeForm({
     extensionUri,
-    title: "FlowTest: Start Intake"
+    title: "FlowTest Start Intake"
   });
 
   if (!intake) {
@@ -647,7 +659,11 @@ async function handleStartCommand(
     stream.markdown("- Timeline events were generated from faker fixture.");
     return resultWithFollowups(defaultFollowups());
   }
-  pushVerbose("INTAKE", "received", `${intakeToDocs(intake).length} docs captured`);
+  pushVerbose(
+    "INTAKE",
+    "received",
+    `docs=${intakeToDocs(intake).length} | intake_mode=${intake.multiUpload ? "multi_upload" : "row_mode"} | output_path=${plannedOutputBasePath ?? "pending"}`
+  );
 
   stream.markdown([
     "## FlowTest Start Audit",
@@ -696,7 +712,7 @@ async function handleStartCommand(
   pushVerbose(
     "API_SPEC",
     "ai_request_dispatched",
-    `task=GENERATE_API_SPEC | model=${apiSpecDispatch.model} | called_at=${apiSpecDispatch.calledAt}`,
+    aiDispatchDetail(apiSpecDispatch, aiTimeoutMs),
     [{
       label: "AI Request",
       title: "API Spec - AI Request",
@@ -777,7 +793,7 @@ async function handleStartCommand(
   pushVerbose(
     "WIREMOCK",
     "ai_request_dispatched",
-    `task=GENERATE_MOCKS | model=${wiremockDispatch.model} | called_at=${wiremockDispatch.calledAt}`,
+    aiDispatchDetail(wiremockDispatch, aiTimeoutMs),
     [{
       label: "AI Request",
       title: "WireMock - AI Request",
@@ -875,7 +891,7 @@ async function handleStartCommand(
   pushVerbose(
     "SCENARIO_DSL",
     "ai_request_dispatched",
-    `task=GENERATE_SCENARIO | model=${scenarioDispatch.model} | called_at=${scenarioDispatch.calledAt}`,
+    aiDispatchDetail(scenarioDispatch, aiTimeoutMs),
     [{
       label: "AI Request",
       title: "Scenario DSL - AI Request",
@@ -1261,19 +1277,19 @@ async function openSpecificForm(
   if (formId === "open_scenario_form") {
     return openScenarioForm({
       extensionUri,
-      title: "FlowTest: Scenario Builder"
+      title: "FlowTest Scenario Builder"
     });
   }
   if (formId === "open_mocks_form") {
     return openMocksForm({
       extensionUri,
-      title: "FlowTest: Mocks Planner"
+      title: "FlowTest Mocks Planner"
     });
   }
   if (formId === "open_vision_form") {
     return openVisionForm({
       extensionUri,
-      title: "FlowTest: Vision Assertions"
+      title: "FlowTest Vision Assertions"
     });
   }
   return null;
@@ -1302,7 +1318,7 @@ export function chatRequestHandler(opts: { extensionUri: vscode.Uri }): vscode.C
         while (true) {
           const choice = await openFormsBootstrapForm({
             extensionUri: opts.extensionUri,
-            title: "FlowTest: Available forms"
+            title: "FlowTest Available forms"
           });
 
           if (!choice) {

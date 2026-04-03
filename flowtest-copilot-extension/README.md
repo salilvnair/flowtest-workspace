@@ -75,9 +75,9 @@ This expects `allure` CLI to be installed and available in your PATH.
 
 ## Commands
 
-- `FlowTest: Open Forms`
-- `FlowTest: Start Bridge`
-- `FlowTest: Stop Bridge`
+- `FlowTest Open Forms`
+- `FlowTest Start Bridge`
+- `FlowTest Stop Bridge`
 
 ## Development
 

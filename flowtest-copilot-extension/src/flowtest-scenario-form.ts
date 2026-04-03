@@ -56,7 +56,7 @@ export async function openScenarioForm(opts: {
 }): Promise<string | null> {
   const panel = vscode.window.createWebviewPanel(
     "flowtestScenarioForm",
-    opts.title ?? "FlowTest: Scenario Builder",
+    opts.title ?? "FlowTest Scenario Builder",
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: false }
   );

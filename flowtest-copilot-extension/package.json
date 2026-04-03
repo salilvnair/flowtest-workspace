@@ -30,15 +30,15 @@
     "commands": [
       {
         "command": "flowtest.openControlCenter",
-        "title": "FlowTest: Open Forms"
+        "title": "FlowTest Open Forms"
       },
       {
         "command": "flowtest.startBridge",
-        "title": "FlowTest: Start Bridge"
+        "title": "FlowTest Start Bridge"
       },
       {
         "command": "flowtest.stopBridge",
-        "title": "FlowTest: Stop Bridge"
+        "title": "FlowTest Stop Bridge"
       }
     ],
     "configuration": {
@@ -82,6 +82,11 @@
           "type": "string",
           "default": "http://localhost:8233/namespaces/default/workflows",
           "description": "Base URL for Temporal UI workflow link in FlowTest chat audit"
+        },
+        "flowtest.aiTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "description": "Timeout in milliseconds for each AI generation call before marking run as failed"
         }
       }
     }

@@ -30,7 +30,7 @@ export async function openFormsBootstrapForm(opts: {
 }): Promise<FlowtestFormId | null> {
   const panel = vscode.window.createWebviewPanel(
     "flowtestFormsBootstrap",
-    opts.title ?? "FlowTest: Available forms",
+    opts.title ?? "FlowTest Available forms",
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: false }
   );

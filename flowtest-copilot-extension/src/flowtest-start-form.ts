@@ -41,7 +41,7 @@ export async function openStartIntakeForm(opts: {
 }): Promise<StartIntakePayload | null> {
   const panel = vscode.window.createWebviewPanel(
     "flowtestStartForm",
-    opts.title ?? "FlowTest: Start Intake",
+    opts.title ?? "FlowTest Start Intake",
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: false }
   );
