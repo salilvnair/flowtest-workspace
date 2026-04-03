@@ -81,6 +81,14 @@ export class FlowtestStatusPanel {
         this.webviewReady = true;
         console.log("[FlowTestStatusPanel] webview ready -> flushState");
         this.flushState();
+        return;
+      }
+      if (msg?.type === "openExternal") {
+        const url = String(msg?.url || "").trim();
+        if (!url) {
+          return;
+        }
+        void vscode.env.openExternal(vscode.Uri.parse(url));
       }
     });
     const html = this.getHtml();
@@ -198,16 +206,57 @@ export class FlowtestStatusPanel {
       flex-direction: column;
       overflow: hidden;
     }
-    .panelStack { margin-top: 12px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+    .panelStack { margin-top: 12px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
     .hero { padding: 12px; height: 100%; overflow: auto; }
     h1 { margin: 0; font-size: 16px; font-weight: 900; letter-spacing: 0.2px; }
     .chip { border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--card) 82%, transparent); }
     .metaRich { margin-top: 8px; display: flex; flex-direction: column; gap: 7px; }
-    .metaChip { border: 1px solid var(--border); border-radius: 10px; padding: 7px 8px; background: color-mix(in srgb, var(--card) 84%, transparent); width: 100%; }
+    .metaChip { border: 1px solid var(--border); border-radius: 10px; padding: 7px 8px; background: linear-gradient(120deg, color-mix(in srgb, var(--card) 90%, transparent), color-mix(in srgb, var(--bg) 95%, transparent)); width: 100%; }
     .metaChip .mk { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.35px; margin-bottom: 2px; font-weight: 800; }
-    .metaChip .mv { display: block; font-size: 11px; color: var(--fg); font-weight: 700; white-space: normal; word-break: break-word; }
+    .metaChip .mv { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--fg); font-weight: 700; white-space: normal; word-break: break-word; }
+    .metaValueText { min-width: 0; overflow-wrap: anywhere; }
+    .metaValueLink { color: #9fd1ff; text-decoration: none; border-bottom: 1px dashed color-mix(in srgb, #9fd1ff 45%, transparent); }
+    .metaValueLink:hover { text-decoration: underline; }
+    .metaCopyBtn {
+      flex: 0 0 auto;
+      border: 1px solid color-mix(in srgb, #9fd1ff 44%, var(--border));
+      border-radius: 999px;
+      width: 22px;
+      height: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, #9fd1ff 13%, transparent);
+      color: #9fd1ff;
+      cursor: pointer;
+      padding: 0;
+    }
+    .metaCopyBtn svg {
+      width: 11px;
+      height: 11px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: opacity 180ms ease, transform 180ms ease;
+    }
+    .metaCopyBtn .metaCheck {
+      display: none;
+      transform: scale(0.65);
+    }
+    .metaCopyBtn.copied .metaCopy {
+      display: none;
+    }
+    .metaCopyBtn.copied .metaCheck {
+      display: inline;
+      transform: scale(1);
+    }
     .stats { margin-top: 10px; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
     .tile { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: color-mix(in srgb, var(--card) 86%, transparent); }
+    .tile.ok { background: linear-gradient(140deg, color-mix(in srgb, #9ef0b7 14%, transparent), color-mix(in srgb, var(--card) 90%, transparent)); }
+    .tile.bad { background: linear-gradient(140deg, color-mix(in srgb, #ff9db7 13%, transparent), color-mix(in srgb, var(--card) 90%, transparent)); }
+    .tile.mode { background: linear-gradient(140deg, color-mix(in srgb, #9fd1ff 13%, transparent), color-mix(in srgb, var(--card) 90%, transparent)); }
     .tile .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
     .tile .v { margin-top: 3px; font-size: 15px; font-weight: 900; }
     .tile.ok .v { color: var(--ok); }
@@ -217,7 +266,22 @@ export class FlowtestStatusPanel {
     .section.grow { flex: 1 1 auto; min-height: 0; }
     .runSection { flex: 0 0 auto; }
     .runSection .sectionBody { max-height: 52vh; overflow: hidden; }
+    .runSection.grow .sectionBody { max-height: none; }
     .timelineSection { flex: 1 1 auto; min-height: 280px; }
+    .resizeDivider {
+      height: 10px;
+      margin: 0 4px;
+      border-radius: 999px;
+      cursor: row-resize;
+      background: linear-gradient(to bottom, transparent 38%, color-mix(in srgb, var(--border) 68%, transparent) 38%, color-mix(in srgb, var(--border) 68%, transparent) 62%, transparent 62%);
+      transition: background 150ms ease, box-shadow 150ms ease;
+      flex: 0 0 auto;
+    }
+    .resizeDivider:hover,
+    .resizeDivider.dragging {
+      background: linear-gradient(to bottom, transparent 35%, color-mix(in srgb, var(--info) 78%, transparent) 35%, color-mix(in srgb, var(--info) 78%, transparent) 65%, transparent 65%);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--info) 50%, transparent) inset;
+    }
     .sectionBody { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
     .section.collapsed .sectionBody { max-height: 0; opacity: 0; }
     .sectionHead { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; font-weight: 900; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -261,7 +325,10 @@ export class FlowtestStatusPanel {
     .timerDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
     .detail { color: var(--muted); margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
     .actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
-    .actionBtn { border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 84%, transparent); color: var(--fg); font-size: 10px; line-height: 1; padding: 4px 8px; cursor: pointer; }
+    .actionBtn { border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 84%, transparent); color: var(--fg); font-size: 10px; line-height: 1; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+    .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
+    .actionBtn.file { color: #9be7ff; border-color: color-mix(in srgb, #9be7ff 50%, var(--border)); background: color-mix(in srgb, #9be7ff 16%, transparent); }
+    .actionBtn.engine { color: #ffb3a5; border-color: color-mix(in srgb, #ffb3a5 50%, var(--border)); background: color-mix(in srgb, #ffb3a5 16%, transparent); }
     .summary { padding: 9px 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
     .summary b { color: var(--fg); }
     .stateComplete { color: #9ef0b7; }
@@ -272,7 +339,24 @@ export class FlowtestStatusPanel {
     .modalHead { padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .modalTitle { font-weight: 800; font-size: 12px; }
     .modalActions { display: inline-flex; align-items: center; gap: 6px; }
-    .closeBtn { border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--card) 86%, transparent); color: var(--fg); font-size: 11px; padding: 3px 8px; cursor: pointer; }
+    .closeBtn { border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--card) 86%, transparent); color: var(--fg); font-size: 11px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; width: max-content; }
+    .closeBtn.copy { color: #9be7ff; border-color: color-mix(in srgb, #9be7ff 50%, var(--border)); background: color-mix(in srgb, #9be7ff 16%, transparent); }
+    .closeBtn.download { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
+    .closeBtn.dismiss { color: #ffb3a5; border-color: color-mix(in srgb, #ffb3a5 50%, var(--border)); background: color-mix(in srgb, #ffb3a5 16%, transparent); }
+    .closeBtn .btnIconWrap { position: relative; width: 12px; height: 12px; display: inline-block; }
+    .closeBtn .btnIcon { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; position: absolute; inset: 0; transition: opacity 200ms ease, transform 200ms ease; }
+    .closeBtn .checkGlyph { opacity: 0; transform: scale(0.6); }
+    .closeBtn.copied .copyGlyph { opacity: 0; transform: scale(0.6); }
+    .closeBtn.copied .checkGlyph { opacity: 1; transform: scale(1); }
+    .closeBtn .btnLabel { min-width: 0; text-align: left; }
+    .closeBtn.download .dlStem, .closeBtn.download .dlHead { transition: transform 260ms ease, opacity 260ms ease; transform-origin: 50% 50%; }
+    .closeBtn.downloading .dlStem, .closeBtn.downloading .dlHead { transform: translateY(3px); opacity: 0.35; }
+    .closeBtn.downloading .dlBase { animation: dlBasePulse 360ms ease; }
+    @keyframes dlBasePulse {
+      0% { opacity: 0.55; }
+      50% { opacity: 1; }
+      100% { opacity: 0.75; }
+    }
     .modalBody { margin: 0; padding: 10px; overflow: auto; white-space: normal; word-break: normal; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; color: var(--fg); background: color-mix(in srgb, var(--card) 74%, transparent); flex: 1 1 auto; min-height: 0; }
     .codeFrame { margin: 0; border-radius: 8px; border: 1px solid var(--border); overflow: auto; background: #0d1117; }
     .codeFrame code { display: block; padding: 12px; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; line-height: 1.45; white-space: pre; }
@@ -298,6 +382,7 @@ export class FlowtestStatusPanel {
         </div>
       </div>
     </div>
+    <div id="sectionDivider" class="resizeDivider" title="Drag to resize Run Center / Timeline"></div>
     <div class="section timelineSection grow" id="timelineSection">
       <div class="sectionHead">
         <div class="sectionHeadLeft">Live Timeline <button id="timelineCollapseBtn" class="collapseBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
@@ -317,9 +402,29 @@ export class FlowtestStatusPanel {
       <div class="modalHead">
         <div class="modalTitle" id="modalTitle">Details</div>
         <div class="modalActions">
-          <button class="closeBtn" id="modalCopyBtn" type="button">Copy</button>
-          <button class="closeBtn" id="modalDownloadBtn" type="button">Download</button>
-          <button class="closeBtn" id="modalCloseBtn" type="button">Close</button>
+          <button class="closeBtn copy" id="modalCopyBtn" type="button">
+            <span class="btnIconWrap">
+              <svg class="btnIcon copyGlyph" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h9a2 2 0 0 1 2 2v1"></path></svg>
+              <svg class="btnIcon checkGlyph" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>
+            </span>
+            <span class="btnLabel">Copy</span>
+          </button>
+          <button class="closeBtn download" id="modalDownloadBtn" type="button">
+            <span class="btnIconWrap">
+              <svg class="btnIcon" viewBox="0 0 24 24">
+                <path class="dlStem" d="M12 3v12"></path>
+                <path class="dlHead" d="M8 11l4 4l4 -4"></path>
+                <path class="dlBase" d="M4 21h16"></path>
+              </svg>
+            </span>
+            <span class="btnLabel">Download</span>
+          </button>
+          <button class="closeBtn dismiss" id="modalCloseBtn" type="button">
+            <span class="btnIconWrap">
+              <svg class="btnIcon" viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+            </span>
+            <span class="btnLabel">Close</span>
+          </button>
         </div>
       </div>
       <div class="modalBody" id="modalBody"></div>
@@ -327,9 +432,11 @@ export class FlowtestStatusPanel {
   </div>
   <script>
     const vscodeApi = acquireVsCodeApi();
+    const panelStack = document.querySelector('.panelStack');
     const timeline = document.getElementById('timeline');
     const timelineSection = document.getElementById('timelineSection');
     const runCenterSection = document.getElementById('runCenterSection');
+    const sectionDivider = document.getElementById('sectionDivider');
     const timelineCollapseBtn = document.getElementById('timelineCollapseBtn');
     const runCenterCollapseBtn = document.getElementById('runCenterCollapseBtn');
     const followLogs = document.getElementById('followLogs');
@@ -347,32 +454,133 @@ export class FlowtestStatusPanel {
     let detailId = 0;
     let modalText = '';
     let modalName = 'detail';
+    let dividerDrag = null;
+    let manualRunHeight = null;
     const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-', allureGenerateCommand: '-' };
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function asMetaText(v) {
+      const raw = String(v || '-').trim();
+      return raw ? raw : '-';
+    }
+    function metaCopyButton(copyValue) {
+      if (!copyValue || copyValue === '-') {
+        return '';
+      }
+      return '<button class="metaCopyBtn" type="button" data-copy="' + esc(copyValue) + '" title="Copy">' +
+        '<svg class="metaCopy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h9a2 2 0 0 1 2 2v1"></path></svg>' +
+        '<svg class="metaCheck" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>' +
+      '</button>';
+    }
     function metaHtml() {
-      return '<div class="metaChip"><span class="mk">Run</span><span class="mv">' + meta.runName + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Orchestration</span><span class="mv">' + meta.orchestrationId + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Temporal</span><span class="mv">' + meta.temporalLink + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Output Path</span><span class="mv">' + meta.outputPath + '</span></div>' +
-        '<div class="metaChip"><span class="mk">WireMock Base URL</span><span class="mv">' + meta.wiremockBaseUrl + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Allure Results</span><span class="mv">' + meta.allureResultsPath + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Allure Report</span><span class="mv">' + meta.allureReportPath + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Allure Command</span><span class="mv">' + meta.allureGenerateCommand + '</span></div>';
+      const run = asMetaText(meta.runName);
+      const orchestration = asMetaText(meta.orchestrationId);
+      const temporal = asMetaText(meta.temporalLink);
+      const outputPath = asMetaText(meta.outputPath);
+      const wiremockUrl = asMetaText(meta.wiremockBaseUrl);
+      const allureResults = asMetaText(meta.allureResultsPath);
+      const allureReport = asMetaText(meta.allureReportPath);
+      const allureCommand = asMetaText(meta.allureGenerateCommand);
+      const temporalView = temporal !== '-'
+        ? '<a class="metaValueLink" href="' + esc(temporal) + '" data-open-url="' + esc(temporal) + '">' + esc(temporal) + '</a>'
+        : '-';
+      return '<div class="metaChip"><span class="mk">Run</span><span class="mv"><span class="metaValueText">' + esc(run) + '</span>' + metaCopyButton(run) + '</span></div>' +
+        '<div class="metaChip"><span class="mk">Orchestration</span><span class="mv"><span class="metaValueText">' + esc(orchestration) + '</span>' + metaCopyButton(orchestration) + '</span></div>' +
+        '<div class="metaChip"><span class="mk">Temporal</span><span class="mv"><span class="metaValueText">' + temporalView + '</span></span></div>' +
+        '<div class="metaChip"><span class="mk">Output Path</span><span class="mv"><span class="metaValueText">' + esc(outputPath) + '</span></span></div>' +
+        '<div class="metaChip"><span class="mk">WireMock Base URL</span><span class="mv"><span class="metaValueText">' + esc(wiremockUrl) + '</span></span></div>' +
+        '<div class="metaChip"><span class="mk">Allure Results</span><span class="mv"><span class="metaValueText">' + esc(allureResults) + '</span></span></div>' +
+        '<div class="metaChip"><span class="mk">Allure Report</span><span class="mv"><span class="metaValueText">' + esc(allureReport) + '</span></span></div>' +
+        '<div class="metaChip"><span class="mk">Allure Command</span><span class="mv"><span class="metaValueText">' + esc(allureCommand) + '</span></span></div>';
     }
     function renderMeta() { document.getElementById('runMeta').innerHTML = metaHtml(); }
+    document.getElementById('runMeta').addEventListener('click', async (event) => {
+      const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
+      if (copyBtn) {
+        const copyValue = copyBtn.getAttribute('data-copy') || '';
+        try { await navigator.clipboard.writeText(copyValue); } catch {}
+        copyBtn.classList.remove('copied');
+        void copyBtn.offsetWidth;
+        copyBtn.classList.add('copied');
+        setTimeout(() => copyBtn.classList.remove('copied'), 850);
+        return;
+      }
+      const link = event.target && event.target.closest ? event.target.closest('.metaValueLink[data-open-url]') : null;
+      if (link) {
+        event.preventDefault();
+        const url = link.getAttribute('data-open-url') || '';
+        vscodeApi.postMessage({ type: 'openExternal', url });
+      }
+    });
     function updateLayout() {
       const rc = runCenterSection.classList.contains('collapsed');
       const tl = timelineSection.classList.contains('collapsed');
+      sectionDivider.style.display = (!rc && !tl) ? 'block' : 'none';
       runCenterSection.classList.remove('grow');
       timelineSection.classList.remove('grow');
-      if (rc && !tl) timelineSection.classList.add('grow');
-      if (tl && !rc) runCenterSection.classList.add('grow');
-      if (!rc && !tl) timelineSection.classList.add('grow');
+      if (rc && !tl) {
+        runCenterSection.style.flex = '0 0 auto';
+        timelineSection.style.flex = '1 1 auto';
+        timelineSection.classList.add('grow');
+        return;
+      }
+      if (tl && !rc) {
+        timelineSection.style.flex = '0 0 auto';
+        runCenterSection.style.flex = '1 1 auto';
+        runCenterSection.classList.add('grow');
+        return;
+      }
+      if (!rc && !tl) {
+        if (manualRunHeight && manualRunHeight > 0) {
+          runCenterSection.style.flex = '0 0 ' + Math.round(manualRunHeight) + 'px';
+          timelineSection.style.flex = '1 1 auto';
+        } else {
+          runCenterSection.style.flex = '';
+          timelineSection.style.flex = '';
+        }
+        timelineSection.classList.add('grow');
+      }
     }
+    sectionDivider.addEventListener('mousedown', (e) => {
+      if (runCenterSection.classList.contains('collapsed') || timelineSection.classList.contains('collapsed')) return;
+      const runRect = runCenterSection.getBoundingClientRect();
+      const stackRect = panelStack.getBoundingClientRect();
+      dividerDrag = { startY: e.clientY, startRun: runRect.height, stackH: stackRect.height };
+      sectionDivider.classList.add('dragging');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!dividerDrag) return;
+      const delta = e.clientY - dividerDrag.startY;
+      const minTop = 180;
+      const minBottom = 220;
+      const maxTop = Math.max(minTop, dividerDrag.stackH - minBottom - sectionDivider.offsetHeight);
+      const nextTop = Math.max(minTop, Math.min(maxTop, dividerDrag.startRun + delta));
+      runCenterSection.style.flex = '0 0 ' + Math.round(nextTop) + 'px';
+      timelineSection.style.flex = '1 1 auto';
+    });
+    window.addEventListener('mouseup', () => {
+      if (!dividerDrag) return;
+      const m = /^0 0 ([0-9]+)px$/.exec(String(runCenterSection.style.flex || ''));
+      manualRunHeight = m ? Number(m[1]) : manualRunHeight;
+      dividerDrag = null;
+      sectionDivider.classList.remove('dragging');
+    });
     runCenterCollapseBtn.addEventListener('click', () => { runCenterSection.classList.toggle('collapsed'); updateLayout(); });
     timelineCollapseBtn.addEventListener('click', () => { timelineSection.classList.toggle('collapsed'); updateLayout(); });
     modalCloseBtn.addEventListener('click', () => detailModal.classList.remove('open'));
-    modalCopyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText(modalText || ''); } catch {} });
+    modalCopyBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(modalText || ''); } catch {}
+      modalCopyBtn.classList.remove('copied');
+      void modalCopyBtn.offsetWidth;
+      modalCopyBtn.classList.add('copied');
+      setTimeout(() => modalCopyBtn.classList.remove('copied'), 900);
+    });
     modalDownloadBtn.addEventListener('click', () => {
+      modalDownloadBtn.classList.remove('downloading');
+      void modalDownloadBtn.offsetWidth;
+      modalDownloadBtn.classList.add('downloading');
       const blob = new Blob([modalText || ''], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -380,9 +588,24 @@ export class FlowtestStatusPanel {
       a.download = (modalName || 'detail').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.txt';
       a.click();
       URL.revokeObjectURL(url);
+      setTimeout(() => modalDownloadBtn.classList.remove('downloading'), 600);
     });
     function mmss(s){ s=Math.max(0,s|0); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
     function stageKey(stage){ return String(stage||'').toLowerCase().trim(); }
+    function actionClass(label) {
+      const l = String(label || '').toLowerCase();
+      if (l.includes('ai')) return 'ai';
+      if (l.includes('engine')) return 'engine';
+      return 'file';
+    }
+    function actionIcon(label) {
+      const l = String(label || '').toLowerCase();
+      if (l.includes('ai')) return '{}';
+      if (l.includes('engine')) return '▶';
+      if (l.includes('dsl')) return '◇';
+      if (l.includes('mock')) return '◈';
+      return '▦';
+    }
     function stageCls(stage){ return String(stage || '').toLowerCase().replace(/\s+/g, '-'); }
     function statusMeta(status) {
       const s = String(status || '').toLowerCase();
@@ -431,7 +654,9 @@ export class FlowtestStatusPanel {
           const a = ev.actions[i];
           const id = idPrefix + '_' + i;
           detailStore.set(id, { title: a.title || a.label || 'Details', content: a.content || '' });
-          actions.push('<button class="actionBtn" data-id="' + id + '" type="button">' + (a.label || 'View') + '</button>');
+          const cls = actionClass(a.label);
+          const icon = actionIcon(a.label);
+          actions.push('<button class="actionBtn ' + cls + '" data-id="' + id + '" type="button">' + icon + ' ' + (a.label || 'View') + '</button>');
         }
       }
       row.innerHTML =
