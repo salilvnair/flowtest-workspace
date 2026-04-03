@@ -7,6 +7,8 @@ type RunInitPayload = {
   successCount: number;
   failureCount: number;
   intakeMode: string;
+  outputPath?: string;
+  wiremockBaseUrl?: string;
 };
 
 type EventPayload = {
@@ -219,21 +221,20 @@ export class FlowtestStatusPanel {
     .metaValueLink:hover { text-decoration: underline; }
     .metaCopyBtn {
       flex: 0 0 auto;
-      border: 1px solid color-mix(in srgb, #9fd1ff 44%, var(--border));
-      border-radius: 999px;
-      width: 22px;
-      height: 20px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: color-mix(in srgb, #9fd1ff 13%, transparent);
+      border: none;
+      background: transparent;
       color: #9fd1ff;
       cursor: pointer;
       padding: 0;
+      width: 14px;
+      height: 14px;
     }
     .metaCopyBtn svg {
-      width: 11px;
-      height: 11px;
+      width: 12px;
+      height: 12px;
       stroke: currentColor;
       fill: none;
       stroke-width: 2;
@@ -241,6 +242,7 @@ export class FlowtestStatusPanel {
       stroke-linejoin: round;
       transition: opacity 180ms ease, transform 180ms ease;
     }
+    .metaCopyBtn:hover { color: #b9e0ff; }
     .metaCopyBtn .metaCheck {
       display: none;
       transform: scale(0.65);
@@ -722,7 +724,9 @@ export class FlowtestStatusPanel {
       if (msg.type === 'init') {
         const p = msg.payload || {};
         meta.runName = p.runName || '-'; meta.orchestrationId = p.orchestrationId || '-'; meta.temporalLink = p.temporalLink || '-';
-        meta.outputPath = '-'; meta.wiremockBaseUrl = '-'; meta.allureResultsPath = '-'; meta.allureReportPath = '-'; meta.allureGenerateCommand = '-';
+        meta.outputPath = p.outputPath || 'pending (.flowtest-runs)';
+        meta.wiremockBaseUrl = p.wiremockBaseUrl || 'pending (engine will publish base URL)';
+        meta.allureResultsPath = '-'; meta.allureReportPath = '-'; meta.allureGenerateCommand = '-';
         renderMeta();
         document.getElementById('successCount').textContent = String(p.successCount ?? 0);
         document.getElementById('failureCount').textContent = String(p.failureCount ?? 0);

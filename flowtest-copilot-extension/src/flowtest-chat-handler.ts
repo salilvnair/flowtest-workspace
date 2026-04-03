@@ -522,6 +522,7 @@ async function handleStartCommand(
     "http://localhost:8233/namespaces/default/workflows"
   );
   let temporalLink = `${temporalUiBase}`;
+  const plannedOutputBasePath = await resolveOutputBasePath(intake);
   const statusPanel = FlowtestStatusPanel.createOrShow(extensionUri);
   const verboseLines: string[] = [];
   const pushVerbose = (
@@ -551,7 +552,9 @@ async function handleStartCommand(
     temporalLink,
     successCount: intake.successSamples.length,
     failureCount: intake.failureSamples.length,
-    intakeMode: intake.multiUpload ? "multi upload" : "row mode"
+    intakeMode: intake.multiUpload ? "multi upload" : "row mode",
+    outputPath: plannedOutputBasePath ?? "pending (.flowtest-runs)",
+    wiremockBaseUrl: "pending (engine will publish base URL)"
   });
   pushVerbose("RUN", "started", `runName=${intake.runName}`);
   pushVerbose("UI", "status_panel_initialized");
@@ -930,7 +933,7 @@ async function handleStartCommand(
   ].join("\n"));
   stream.markdown("```json\n" + engineSummaryBody + "\n```");
   pushVerbose("UI", "engine_section_rendered");
-  const outputBasePath = await resolveOutputBasePath(intake);
+  const outputBasePath = plannedOutputBasePath;
   if (outputBasePath) {
     try {
       pushVerbose("ARTIFACTS", "persist_started", outputBasePath);
