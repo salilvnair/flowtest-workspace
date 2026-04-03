@@ -268,6 +268,7 @@ export class FlowtestStatusPanel {
     .runSection .sectionBody { max-height: 52vh; overflow: hidden; }
     .runSection.grow .sectionBody { max-height: none; }
     .timelineSection { flex: 1 1 auto; min-height: 280px; }
+    .timelineSection.collapsed { min-height: 0; flex: 0 0 auto; }
     .resizeDivider {
       height: 10px;
       margin: 0 4px;
@@ -290,6 +291,7 @@ export class FlowtestStatusPanel {
     .collapseBtn { min-width: 22px; height: 20px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; }
     .expandBtn { padding: 1px 7px; }
     .collapseBtn svg, .expandBtn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 180ms ease; }
+    .collapseBtn.is-collapsed svg, .expandBtn.is-collapsed svg { transform: rotate(180deg); }
     .followToggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 10px; color: var(--muted); background: color-mix(in srgb, var(--card) 82%, transparent); text-transform: none; letter-spacing: 0; font-weight: 700; }
     .followToggle input { accent-color: var(--info); width: 12px; height: 12px; }
     .testBtn { border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 700; color: #9fd1ff; background: color-mix(in srgb, #9fd1ff 14%, transparent); cursor: pointer; }
@@ -495,6 +497,11 @@ export class FlowtestStatusPanel {
         '<div class="metaChip"><span class="mk">Allure Command</span><span class="mv"><span class="metaValueText">' + esc(allureCommand) + '</span></span></div>';
     }
     function renderMeta() { document.getElementById('runMeta').innerHTML = metaHtml(); }
+    function syncChevronState(btn, isCollapsed) {
+      if (!btn) return;
+      btn.classList.toggle('is-collapsed', Boolean(isCollapsed));
+      btn.setAttribute('aria-expanded', String(!isCollapsed));
+    }
     document.getElementById('runMeta').addEventListener('click', async (event) => {
       const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
       if (copyBtn) {
@@ -567,8 +574,16 @@ export class FlowtestStatusPanel {
       dividerDrag = null;
       sectionDivider.classList.remove('dragging');
     });
-    runCenterCollapseBtn.addEventListener('click', () => { runCenterSection.classList.toggle('collapsed'); updateLayout(); });
-    timelineCollapseBtn.addEventListener('click', () => { timelineSection.classList.toggle('collapsed'); updateLayout(); });
+    runCenterCollapseBtn.addEventListener('click', () => {
+      runCenterSection.classList.toggle('collapsed');
+      syncChevronState(runCenterCollapseBtn, runCenterSection.classList.contains('collapsed'));
+      updateLayout();
+    });
+    timelineCollapseBtn.addEventListener('click', () => {
+      timelineSection.classList.toggle('collapsed');
+      syncChevronState(timelineCollapseBtn, timelineSection.classList.contains('collapsed'));
+      updateLayout();
+    });
     modalCloseBtn.addEventListener('click', () => detailModal.classList.remove('open'));
     modalCopyBtn.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(modalText || ''); } catch {}
@@ -670,7 +685,17 @@ export class FlowtestStatusPanel {
         '<span class="timerPill hidden"><span class="timerDot"></span><span class="timerText">⏱ 00:00</span></span></span></div>' +
         '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + ev.detail + '</div>' : '') + (actions.length ? '<div class="actions">' + actions.join('') + '</div>' : '') + '</div></div>';
       timeline.appendChild(row);
-      row.querySelector('.expandBtn').addEventListener('click', () => row.classList.toggle('compact'));
+      const rowExpandBtn = row.querySelector('.expandBtn');
+      const syncRowExpandState = () => {
+        const isCompact = row.classList.contains('compact');
+        syncChevronState(rowExpandBtn, isCompact);
+        rowExpandBtn.setAttribute('title', isCompact ? 'Expand' : 'Collapse');
+      };
+      rowExpandBtn.addEventListener('click', () => {
+        row.classList.toggle('compact');
+        syncRowExpandState();
+      });
+      syncRowExpandState();
       row.querySelectorAll('.actionBtn').forEach((b) => b.addEventListener('click', () => {
         const p = detailStore.get(b.getAttribute('data-id')); if (!p) return;
         modalName = p.title; modalText = p.content;
@@ -730,6 +755,8 @@ export class FlowtestStatusPanel {
       setSummary('Completed', 'Fake timeline run completed.');
     });
     renderMeta();
+    syncChevronState(runCenterCollapseBtn, runCenterSection.classList.contains('collapsed'));
+    syncChevronState(timelineCollapseBtn, timelineSection.classList.contains('collapsed'));
     updateLayout();
     addEvent({ time: new Date().toLocaleTimeString([], { hour12: false }), stage: 'UI', status: 'info', title: 'Webview Ready', detail: 'Timeline renderer initialized.' });
     vscodeApi.postMessage({ type: 'ready' });
