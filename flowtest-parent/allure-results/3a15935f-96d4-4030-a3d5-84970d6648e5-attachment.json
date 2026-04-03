@@ -1,0 +1,10 @@
+{
+  "dataKeys" : [ ],
+  "dslVersion" : "1.0",
+  "name" : "Zapper Disconnect Workflow - Full Happy Path with Async Event Validation",
+  "allureResultsDirectory" : "/Users/salilvnair/workspace/git/salilvnair/flowtest-workspace/flowtest-parent/allure-results",
+  "scenarioId" : "zapper_disconnect_happy_path",
+  "stepCount" : 46,
+  "stepIds" : [ "step_01_log_start", "step_02_set_context_site", "step_03_address_validation", "step_04_assert_address_validation_status_code", "step_05_assert_address_validation_status_field", "step_06_assert_address_site_valid", "step_07_assert_address_site_id", "step_08_assert_normalized_address", "step_09_log_address_passed", "step_10_inventory_validation", "step_11_assert_inventory_status_code", "step_12_assert_inventory_status_field", "step_13_assert_inventory_transformer_exists", "step_14_assert_inventory_connection_exists", "step_15_assert_inventory_feeder", "step_16_log_inventory_passed", "step_17_pending_bills_check", "step_18_assert_billing_status_code", "step_19_assert_billing_status_field", "step_20_assert_billing_amount_zero", "step_21_assert_billing_currency", "step_22_log_billing_passed", "step_23_disconnect_submit", "step_24_assert_disconnect_status_code", "step_25_assert_disconnect_status_field", "step_26_assert_disconnect_transaction_id", "step_27_assert_disconnect_correlation_id", "step_28_assert_disconnect_estimated_completion", "step_29_set_context_disconnect_response", "step_30_log_disconnect_accepted", "step_31_sleep_before_callback", "step_32_disconnect_callback", "step_33_assert_callback_status_code", "step_34_assert_callback_status_field", "step_35_assert_callback_received_at", "step_36_log_callback_acknowledged", "step_37_sleep_before_event_validation", "step_38_async_event_validation", "step_39_assert_event_validation_status_code", "step_40_assert_event_validation_status_passed", "step_41_assert_event_validation_correlation_id", "step_42_assert_event_sequence_first", "step_43_assert_event_sequence_second", "step_44_assert_event_sequence_third", "step_45_assert_event_error_code_null", "step_46_log_workflow_complete" ],
+  "tags" : [ ]
+}

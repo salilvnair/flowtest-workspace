@@ -1,0 +1,21 @@
+{
+  "customerType": "ENTERPRISE",
+  "customerName": "UPS",
+  "requestType": "DISCONNECT",
+  "sites": [
+    {
+      "siteId": "UPS-TX-001",
+      "state": "TX",
+      "city": "Dallas",
+      "zip": "75001",
+      "addressLine1": "1200 Logistics Pkwy"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "state": "NJ",
+      "city": "Newark",
+      "zip": "07102",
+      "addressLine1": "900 Distribution Ave"
+    }
+  ]
+}

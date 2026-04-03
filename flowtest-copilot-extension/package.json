@@ -1,0 +1,101 @@
+{
+  "name": "flowtest",
+  "displayName": "flowtest",
+  "icon": "images/flowtest_bot.png",
+  "description": "FlowTest is a VS Code Copilot Chat participant (@flowtest) with structured FlowTest-native forms and Java engine bridge support.",
+  "version": "0.0.1",
+  "publisher": "salilvnair",
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onChatParticipant:salilvnair.copilot.flowtest"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "salilvnair.copilot.flowtest",
+        "name": "flowtest",
+        "fullName": "FlowTest",
+        "description": "Copilot-powered FlowTest assistant",
+        "isSticky": true,
+        "commands": []
+      }
+    ],
+    "commands": [
+      {
+        "command": "flowtest.openControlCenter",
+        "title": "FlowTest: Open Forms"
+      },
+      {
+        "command": "flowtest.startBridge",
+        "title": "FlowTest: Start Bridge"
+      },
+      {
+        "command": "flowtest.stopBridge",
+        "title": "FlowTest: Stop Bridge"
+      }
+    ],
+    "configuration": {
+      "title": "FlowTest",
+      "properties": {
+        "flowtest.engineBaseUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "Base URL for FlowTest Java engine"
+        },
+        "flowtest.bridgeHost": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host for VS Code AI bridge server"
+        },
+        "flowtest.bridgePort": {
+          "type": "number",
+          "default": 7171,
+          "description": "Port for VS Code AI bridge server"
+        },
+        "flowtest.aiProvider": {
+          "type": "string",
+          "enum": [
+            "copilot",
+            "openai"
+          ],
+          "default": "copilot",
+          "description": "AI provider to use from extension"
+        },
+        "flowtest.openaiModel": {
+          "type": "string",
+          "default": "gpt-5.4-mini",
+          "description": "Model when using OpenAI"
+        },
+        "flowtest.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key used by extension if provider=openai"
+        },
+        "flowtest.temporalUiUrl": {
+          "type": "string",
+          "default": "http://localhost:8233/namespaces/default/workflows",
+          "description": "Base URL for Temporal UI workflow link in FlowTest chat audit"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "22.x",
+    "@types/vscode": "^1.103.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "prismjs": "^1.30.0"
+  }
+}

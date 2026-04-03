@@ -1,0 +1,1 @@
+{"zapper_disconnect_happy_path":{"statistic":{"failed":1,"broken":0,"skipped":0,"passed":0,"unknown":0,"total":1},"items":[{"uid":"dd2efbc6cd6f9fee","status":"failed","statusDetails":"Failed at step: step_03_address_validation","time":{"start":1775200128572,"stop":1775200128621,"duration":49}}]}}

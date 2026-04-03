@@ -1,0 +1,19 @@
+{
+  "status": "BLOCKED",
+  "errorCode": "PENDING_BILLS_FOUND",
+  "pendingBills": [
+    {
+      "siteId": "UPS-TX-001",
+      "amount": 12540.75,
+      "currency": "USD",
+      "agingDays": 43
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "amount": 2300,
+      "currency": "USD",
+      "agingDays": 12
+    }
+  ],
+  "actionRequired": "CLEAR_DUES_BEFORE_DISCONNECT"
+}

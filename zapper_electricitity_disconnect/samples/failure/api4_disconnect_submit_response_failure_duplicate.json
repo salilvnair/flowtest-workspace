@@ -1,0 +1,8 @@
+{
+  "status": "CONFLICT",
+  "errorCode": "DUPLICATE_DISCONNECT_REQUEST",
+  "message": "An active disconnect request already exists for one or more sites",
+  "existingTransactionId": "TXN-2026-0401-00991",
+  "existingCorrelationId": "CORR-ACTIVE-UPS-DISC",
+  "retryAfterSeconds": 1800
+}

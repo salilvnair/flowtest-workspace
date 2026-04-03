@@ -1,0 +1,17 @@
+{
+  "status": "OK",
+  "inventoryChecks": [
+    {
+      "siteId": "UPS-TX-001",
+      "transformerExists": true,
+      "connectionExists": true,
+      "feeder": "FD-TX-17"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "transformerExists": true,
+      "connectionExists": true,
+      "feeder": "FD-NJ-04"
+    }
+  ]
+}

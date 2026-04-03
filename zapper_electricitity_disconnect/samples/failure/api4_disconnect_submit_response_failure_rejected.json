@@ -1,0 +1,11 @@
+{
+  "status": "REJECTED",
+  "errorCode": "PRECHECK_FAILED",
+  "message": "Disconnect request rejected due to unresolved pre-check failures",
+  "failedChecks": [
+    "address_validation",
+    "pending_bills"
+  ],
+  "transactionId": null,
+  "correlationId": null
+}

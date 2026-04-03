@@ -1,0 +1,18 @@
+{
+  "status": "REJECTED",
+  "errorCode": "ADDR_MISMATCH",
+  "message": "Address mismatch for one or more sites",
+  "validatedSites": [
+    {
+      "siteId": "UPS-TX-001",
+      "isValid": true,
+      "normalizedAddress": "1200 LOGISTICS PKWY, DALLAS, TX 75001"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "isValid": false,
+      "reason": "ZIP_CITY_STATE_MISMATCH",
+      "normalizedAddress": "900 DISTRIBUTION AVE, NEWARK, NJ 07103"
+    }
+  ]
+}

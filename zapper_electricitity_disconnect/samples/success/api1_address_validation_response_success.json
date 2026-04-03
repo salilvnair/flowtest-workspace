@@ -1,0 +1,15 @@
+{
+  "status": "VALIDATED",
+  "validatedSites": [
+    {
+      "siteId": "UPS-TX-001",
+      "isValid": true,
+      "normalizedAddress": "1200 LOGISTICS PKWY, DALLAS, TX 75001"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "isValid": true,
+      "normalizedAddress": "900 DISTRIBUTION AVE, NEWARK, NJ 07102"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "requestType": "DISCONNECT",
+  "requestedBy": "ups.ops@ups.com",
+  "sites": [
+    {
+      "siteId": "UPS-TX-001",
+      "connectionId": "CN-TX-7788",
+      "transformerId": "TR-TX-1122"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "connectionId": "CN-NJ-9900",
+      "transformerId": "TR-NJ-3344"
+    }
+  ]
+}

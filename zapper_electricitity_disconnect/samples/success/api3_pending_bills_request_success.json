@@ -1,0 +1,13 @@
+{
+  "customerAccountId": "UPS-ENT-4451",
+  "sites": [
+    {
+      "siteId": "UPS-TX-001",
+      "connectionId": "CN-TX-7788"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "connectionId": "CN-NJ-9900"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "correlationId": "CORR-59A1F0B8-UPS-DISC",
+  "events": [
+    {
+      "eventType": "HARD_DISCONNECT_DONE",
+      "receivedAt": "2026-04-02T15:31:00Z"
+    },
+    {
+      "eventType": "SOFT_DISCONNECT_DONE",
+      "receivedAt": "2026-04-02T15:32:00Z"
+    },
+    {
+      "eventType": "RIPPED_OFF_WIRES",
+      "receivedAt": "2026-04-02T15:33:00Z"
+    }
+  ],
+  "validationStatus": "FAILED",
+  "errorCode": "EVENT_SEQUENCE_INVALID"
+}

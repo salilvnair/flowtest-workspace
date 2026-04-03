@@ -1,0 +1,2 @@
+"DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
+"FlowTest automated execution for scenario `zapper_disconnect_happy_path`","49","Zapper Disconnect Workflow - Full Happy Path with Async Event Validation","FlowTest","2026-04-03","failed","2026-04-03","Zapper Disconnect Workflow - Full Happy Path with Async Event Validation","FlowTest Engine Runs","",""

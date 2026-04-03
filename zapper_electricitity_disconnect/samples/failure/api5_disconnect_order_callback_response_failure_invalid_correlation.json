@@ -1,0 +1,6 @@
+{
+  "status": "REJECTED",
+  "errorCode": "UNKNOWN_CORRELATION_ID",
+  "message": "Correlation ID not found in active disconnect workflow",
+  "receivedAt": "2026-04-02T15:30:01Z"
+}

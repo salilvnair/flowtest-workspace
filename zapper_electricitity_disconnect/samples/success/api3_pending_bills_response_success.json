@@ -1,0 +1,15 @@
+{
+  "status": "CLEAR",
+  "pendingBills": [
+    {
+      "siteId": "UPS-TX-001",
+      "amount": 0,
+      "currency": "USD"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "amount": 0,
+      "currency": "USD"
+    }
+  ]
+}

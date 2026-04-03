@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+flowtest:
+  ai:
+    mode: auto # openai | copilot | auto | none
+    openai:
+      enabled: false
+      api-key: ${OPENAI_API_KEY:}
+      model: gpt-5.4-mini
+      endpoint: https://api.openai.com/v1/responses
+    external:
+      enabled: true
+      endpoint: ${FLOWTEST_EXTERNAL_AI_ENDPOINT:http://localhost:7171/flowtest/ai/execute}
+      auth-token: ${FLOWTEST_EXTERNAL_AI_AUTH_TOKEN:}
+  execution:
+    base-url: ${FLOWTEST_EXEC_BASE_URL:http://localhost:8080}
+    callbacks:
+      webhook-enabled: false
+      webhook-url: ${FLOWTEST_EXEC_WEBHOOK_URL:}
+      auth-token: ${FLOWTEST_EXEC_WEBHOOK_TOKEN:}
+  temporal:
+    enabled: true
+    target: ${FLOWTEST_TEMPORAL_TARGET:127.0.0.1:7233}
+    namespace: ${FLOWTEST_TEMPORAL_NAMESPACE:default}
+    task-queue: ${FLOWTEST_TEMPORAL_TASK_QUEUE:flowtest-task-queue}
+    workflow-id-prefix: ${FLOWTEST_TEMPORAL_WORKFLOW_ID_PREFIX:flowtest-run}
+  reporting:
+    allure:
+      enabled: true
+      results-directory: ${FLOWTEST_ALLURE_RESULTS_DIR:allure-results}
+      report-directory: ${FLOWTEST_ALLURE_REPORT_DIR:allure-report}

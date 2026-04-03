@@ -1,0 +1,8 @@
+{
+  "assertionCount" : 0,
+  "requestUrl" : "{{baseUrl}}/address/validate",
+  "timeoutMs" : 0,
+  "requestMethod" : "POST",
+  "action" : null,
+  "type" : "api-call"
+}

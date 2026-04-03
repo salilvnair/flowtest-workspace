@@ -1,0 +1,20 @@
+{
+  "status": "FAILED",
+  "errorCode": "INVENTORY_ASSET_NOT_FOUND",
+  "inventoryChecks": [
+    {
+      "siteId": "UPS-TX-001",
+      "transformerExists": true,
+      "connectionExists": false,
+      "missingField": "connectionId",
+      "providedConnectionId": "CN-TX-7788"
+    },
+    {
+      "siteId": "UPS-NJ-002",
+      "transformerExists": false,
+      "connectionExists": true,
+      "missingField": "transformerId",
+      "providedTransformerId": "TR-NJ-3344"
+    }
+  ]
+}

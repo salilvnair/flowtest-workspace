@@ -1,0 +1,7 @@
+{
+  "eventType": "DISCONNECT_ORDER_CREATED",
+  "transactionId": "TXN-2026-0402-00091",
+  "correlationId": "CORR-59A1F0B8-UPS-DISC",
+  "disconnectOrderNumber": "DO-88442",
+  "createdAt": "2026-04-02T15:30:00Z"
+}
