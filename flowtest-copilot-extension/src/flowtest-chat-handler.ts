@@ -310,6 +310,43 @@ function formatDurationMs(ms: number): string {
   return `${mm}:${ss}`;
 }
 
+type EventMeta = Record<string, string | number | boolean>;
+
+class AiTimeoutError extends Error {
+  readonly timeoutMs: number;
+  constructor(timeoutMs: number) {
+    super(`AI request timed out after ${timeoutMs}ms`);
+    this.timeoutMs = timeoutMs;
+    this.name = "AiTimeoutError";
+  }
+}
+
+async function withAiTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<T>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new AiTimeoutError(timeoutMs)), timeoutMs);
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function classifyAiFailure(err: unknown): { category: "timeout" | "provider" | "network" | "unknown"; message: string } {
+  const message = err instanceof Error ? err.message : String(err ?? "Unknown error");
+  if (err instanceof AiTimeoutError || /timed out/i.test(message)) {
+    return { category: "timeout", message };
+  }
+  if (/OpenAI request failed|No copilot\/language model|Language Model API is not available/i.test(message)) {
+    return { category: "provider", message };
+  }
+  if (/fetch failed|network|ECONNREFUSED|ENOTFOUND|EHOSTUNREACH|socket/i.test(message)) {
+    return { category: "network", message };
+  }
+  return { category: "unknown", message };
+}
+
 function aiTraceDetails(ai: AiExecutionDetails): string {
   return [
     `provider=${ai.provider}`,
@@ -524,12 +561,17 @@ async function handleStartCommand(
   let temporalLink = `${temporalUiBase}`;
   const plannedOutputBasePath = await resolveOutputBasePath(intake);
   const statusPanel = FlowtestStatusPanel.createOrShow(extensionUri);
+  const aiTimeoutMs = Math.max(
+    15000,
+    Number(vscode.workspace.getConfiguration("flowtest").get<number>("aiTimeoutMs", 120000))
+  );
   const verboseLines: string[] = [];
   const pushVerbose = (
     stage: string,
     event: string,
     details?: string,
-    actions?: Array<{ label: string; title: string; content: string }>
+    actions?: Array<{ label: string; title: string; content: string }>,
+    meta?: EventMeta
   ) => {
     verboseLines.push(verboseEvent(stage, event, details));
     statusPanel.pushEvent({
@@ -538,12 +580,47 @@ async function handleStartCommand(
       status: verboseStatusFromEvent(event),
       title: prettyLabel(event),
       detail: details,
-      actions
+      actions,
+      meta
     });
   };
   const cancelRun = (detail: string) => {
     pushVerbose("RUN", "cancelled", detail);
     statusPanel.setSummary({ status: "Cancelled", detail });
+  };
+  const failRunFromAi = (
+    stage: "API_SPEC" | "WIREMOCK" | "SCENARIO_DSL",
+    stepLabel: string,
+    dispatch: AiDispatchPreview,
+    err: unknown,
+    actions: Array<{ label: string; title: string; content: string }>
+  ): vscode.ChatResult => {
+    const classified = classifyAiFailure(err);
+    const detail = `${stepLabel} failed (${classified.category}) | ${classified.message}`;
+    pushVerbose(stage, "failed", detail, actions, {
+      task: dispatch.taskType,
+      provider: dispatch.provider,
+      model: dispatch.model,
+      called_at: dispatch.calledAt,
+      timeout_ms: aiTimeoutMs,
+      error: true,
+      error_category: classified.category,
+      error_message: classified.message
+    });
+    statusPanel.setSummary({ status: "Failed", detail });
+    pushVerbose("RUN", "failed", `${stage.toLowerCase()} failed`);
+    stream.markdown([
+      `### ${prettyStage(stage)} Generation`,
+      "",
+      "- **Status:** Failed",
+      `- **Reason:** \`${classified.message}\``,
+      `- **Category:** ${classified.category}`,
+      `- **Provider:** ${dispatch.provider}`,
+      `- **Model:** ${dispatch.model}`
+    ].join("\n"));
+    stream.markdown("\n### Verbose Event Hook\n\n" + verboseLines.join("\n"));
+    pushVerbose("UI", "verbose_section_rendered");
+    return resultWithFollowups(defaultFollowups());
   };
 
   statusPanel.initRun({
@@ -624,13 +701,36 @@ async function handleStartCommand(
       label: "AI Request",
       title: "API Spec - AI Request",
       content: aiRequestPreviewContent(apiSpecDispatch)
-    }]
+    }],
+    {
+      task: "GENERATE_API_SPEC",
+      provider: apiSpecDispatch.provider,
+      model: apiSpecDispatch.model,
+      model_version: "latest",
+      temperature: "default",
+      called_at: apiSpecDispatch.calledAt,
+      error: false
+    }
   );
-  const apiSpecAi = await executeAiTaskDetailed({
-    taskType: "GENERATE_API_SPEC",
-    prompt: apiSpecPrompt,
-    context: { orchestrationId, runName: intake.runName }
-  });
+  let apiSpecAi: AiExecutionDetails;
+  try {
+    apiSpecAi = await withAiTimeout(
+      executeAiTaskDetailed({
+        taskType: "GENERATE_API_SPEC",
+        prompt: apiSpecPrompt,
+        context: { orchestrationId, runName: intake.runName }
+      }),
+      aiTimeoutMs
+    );
+  } catch (err) {
+    return failRunFromAi(
+      "API_SPEC",
+      "API spec generation",
+      apiSpecDispatch,
+      err,
+      [{ label: "AI Request", title: "API Spec - AI Request", content: aiRequestPreviewContent(apiSpecDispatch) }]
+    );
+  }
   const apiSpecOutput = apiSpecAi.responseText;
   pushVerbose(
     "API_SPEC",
@@ -639,7 +739,17 @@ async function handleStartCommand(
     [
       { label: "AI Request", title: "API Spec - AI Request", content: aiRequestTraceContent(apiSpecAi) },
       { label: "AI Response", title: "API Spec - AI Response", content: aiResponseTraceContent(apiSpecAi) }
-    ]
+    ],
+    {
+      task: "GENERATE_API_SPEC",
+      provider: apiSpecAi.provider,
+      model: apiSpecAi.model,
+      called_at: apiSpecAi.calledAt,
+      completed_at: apiSpecAi.completedAt,
+      duration_ms: apiSpecAi.durationMs,
+      response_chars: apiSpecOutput.length,
+      error: false
+    }
   );
   stream.markdown([
     "### API Spec Generation",
@@ -672,13 +782,36 @@ async function handleStartCommand(
       label: "AI Request",
       title: "WireMock - AI Request",
       content: aiRequestPreviewContent(wiremockDispatch)
-    }]
+    }],
+    {
+      task: "GENERATE_MOCKS",
+      provider: wiremockDispatch.provider,
+      model: wiremockDispatch.model,
+      model_version: "latest",
+      temperature: "default",
+      called_at: wiremockDispatch.calledAt,
+      error: false
+    }
   );
-  const wiremockAi = await executeAiTaskDetailed({
-    taskType: "GENERATE_MOCKS",
-    prompt: wiremockPrompt,
-    context: { orchestrationId, runName: intake.runName }
-  });
+  let wiremockAi: AiExecutionDetails;
+  try {
+    wiremockAi = await withAiTimeout(
+      executeAiTaskDetailed({
+        taskType: "GENERATE_MOCKS",
+        prompt: wiremockPrompt,
+        context: { orchestrationId, runName: intake.runName }
+      }),
+      aiTimeoutMs
+    );
+  } catch (err) {
+    return failRunFromAi(
+      "WIREMOCK",
+      "WireMock generation",
+      wiremockDispatch,
+      err,
+      [{ label: "AI Request", title: "WireMock - AI Request", content: aiRequestPreviewContent(wiremockDispatch) }]
+    );
+  }
   const mocksOutput = wiremockAi.responseText;
   pushVerbose(
     "WIREMOCK",
@@ -687,7 +820,17 @@ async function handleStartCommand(
     [
       { label: "AI Request", title: "WireMock - AI Request", content: aiRequestTraceContent(wiremockAi) },
       { label: "AI Response", title: "WireMock - AI Response", content: aiResponseTraceContent(wiremockAi) }
-    ]
+    ],
+    {
+      task: "GENERATE_MOCKS",
+      provider: wiremockAi.provider,
+      model: wiremockAi.model,
+      called_at: wiremockAi.calledAt,
+      completed_at: wiremockAi.completedAt,
+      duration_ms: wiremockAi.durationMs,
+      response_chars: mocksOutput.length,
+      error: false
+    }
   );
   stream.markdown([
     "### Mock Generation",
@@ -737,13 +880,36 @@ async function handleStartCommand(
       label: "AI Request",
       title: "Scenario DSL - AI Request",
       content: aiRequestPreviewContent(scenarioDispatch)
-    }]
+    }],
+    {
+      task: "GENERATE_SCENARIO",
+      provider: scenarioDispatch.provider,
+      model: scenarioDispatch.model,
+      model_version: "latest",
+      temperature: "default",
+      called_at: scenarioDispatch.calledAt,
+      error: false
+    }
   );
-  const scenarioAi = await executeAiTaskDetailed({
-    taskType: "GENERATE_SCENARIO",
-    prompt: scenarioPrompt,
-    context: { orchestrationId, runName: intake.runName }
-  });
+  let scenarioAi: AiExecutionDetails;
+  try {
+    scenarioAi = await withAiTimeout(
+      executeAiTaskDetailed({
+        taskType: "GENERATE_SCENARIO",
+        prompt: scenarioPrompt,
+        context: { orchestrationId, runName: intake.runName }
+      }),
+      aiTimeoutMs
+    );
+  } catch (err) {
+    return failRunFromAi(
+      "SCENARIO_DSL",
+      "Scenario DSL generation",
+      scenarioDispatch,
+      err,
+      [{ label: "AI Request", title: "Scenario DSL - AI Request", content: aiRequestPreviewContent(scenarioDispatch) }]
+    );
+  }
   const scenarioOutput = scenarioAi.responseText;
   pushVerbose(
     "SCENARIO_DSL",
@@ -752,7 +918,17 @@ async function handleStartCommand(
     [
       { label: "AI Request", title: "Scenario DSL - AI Request", content: aiRequestTraceContent(scenarioAi) },
       { label: "AI Response", title: "Scenario DSL - AI Response", content: aiResponseTraceContent(scenarioAi) }
-    ]
+    ],
+    {
+      task: "GENERATE_SCENARIO",
+      provider: scenarioAi.provider,
+      model: scenarioAi.model,
+      called_at: scenarioAi.calledAt,
+      completed_at: scenarioAi.completedAt,
+      duration_ms: scenarioAi.durationMs,
+      response_chars: scenarioOutput.length,
+      error: false
+    }
   );
 
   stream.markdown("### Scenario Generation");

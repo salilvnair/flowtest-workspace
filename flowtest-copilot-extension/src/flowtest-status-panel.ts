@@ -17,6 +17,7 @@ type EventPayload = {
   status: "running" | "success" | "warn" | "error" | "info";
   title: string;
   detail?: string;
+  meta?: Record<string, string | number | boolean>;
   actions?: Array<{
     label: string;
     title: string;
@@ -98,11 +99,9 @@ export class FlowtestStatusPanel {
     this.panel.webview.html = html;
     setTimeout(() => {
       if (!this.webviewReady) {
-        console.error("[FlowTestStatusPanel] no ready handshake, switching to fallback UI");
-        this.fallbackMode = true;
-        this.panel.webview.html = this.getFallbackHtml();
+        console.error("[FlowTestStatusPanel] no ready handshake; keeping main UI (fallback auto-switch disabled)");
       }
-    }, 1500);
+    }, 5000);
     this.panel.onDidDispose(() => {
       if (FlowtestStatusPanel.current === this) {
         FlowtestStatusPanel.current = undefined;
@@ -436,6 +435,13 @@ export class FlowtestStatusPanel {
   </div>
   <script>
     const vscodeApi = acquireVsCodeApi();
+    let readySent = false;
+    function sendReadyOnce() {
+      if (readySent) return;
+      readySent = true;
+      vscodeApi.postMessage({ type: 'ready' });
+    }
+    sendReadyOnce();
     const panelStack = document.querySelector('.panelStack');
     const timeline = document.getElementById('timeline');
     const timelineSection = document.getElementById('timelineSection');
@@ -763,7 +769,7 @@ export class FlowtestStatusPanel {
     syncChevronState(timelineCollapseBtn, timelineSection.classList.contains('collapsed'));
     updateLayout();
     addEvent({ time: new Date().toLocaleTimeString([], { hour12: false }), stage: 'UI', status: 'info', title: 'Webview Ready', detail: 'Timeline renderer initialized.' });
-    vscodeApi.postMessage({ type: 'ready' });
+    sendReadyOnce();
   </script>
 </body>
 </html>`;
