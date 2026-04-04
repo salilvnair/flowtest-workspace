@@ -651,14 +651,11 @@ export class FlowtestStatusPanel {
     .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
     .actionBtn.file { color: #9be7ff; border-color: color-mix(in srgb, #9be7ff 50%, var(--border)); background: color-mix(in srgb, #9be7ff 16%, transparent); }
     .actionBtn.engine { color: #ffb3a5; border-color: color-mix(in srgb, #ffb3a5 50%, var(--border)); background: color-mix(in srgb, #ffb3a5 16%, transparent); }
-    .summary { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); position: relative; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--card) 60%, #0d1117), #0d1117); letter-spacing: 0.15px; line-height: 1.5; }
+    .summary { padding: 8px 14px 10px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--muted); position: relative; overflow: hidden; background: var(--bg); letter-spacing: 0.15px; line-height: 1.5; }
     .summary b { color: var(--fg); font-weight: 700; }
     .summary .summaryDetail { color: color-mix(in srgb, var(--fg) 70%, var(--muted)); font-style: italic; }
-    .summary.thinking { background: linear-gradient(180deg, color-mix(in srgb, var(--info) 8%, var(--card)), #0d1117); }
-    .summary.thinking .summaryProgress { display: inline; color: #b0c4de; font-weight: 600; }
-    .summary.thinking::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 25%, rgba(140,180,255,0.06) 38%, rgba(180,210,255,0.14) 50%, rgba(140,180,255,0.06) 62%, transparent 75%); animation: glossySweep 2s ease-in-out infinite; pointer-events: none; }
-    @keyframes glossySweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
-    .summary.done { background: linear-gradient(180deg, color-mix(in srgb, #9ef0b7 6%, var(--card)), #0d1117); }
+    .summary.thinking .summaryProgress { display: inline; background: linear-gradient(105deg, #8a9bb5 0%, #d0d8e4 40%, #ffffff 50%, #d0d8e4 60%, #8a9bb5 100%); background-size: 200% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: glossyText 2.4s ease-in-out infinite; font-weight: 600; }
+    @keyframes glossyText { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .summary.done .summaryStatus { color: #9ef0b7; font-weight: 700; }
     .lastRowLabel { font-size: 10px; color: color-mix(in srgb, var(--muted) 72%, transparent); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
     .stateComplete { color: #9ef0b7; }
@@ -1098,14 +1095,19 @@ export class FlowtestStatusPanel {
         function tick() { var sec = Math.round((Date.now() - start) / 1000); if (lbl) lbl.textContent = mmss(sec); }
         tick();
         var iv = setInterval(tick, 1000);
-        aiTimers.set(key, { iv: iv, pill: pill });
+        aiTimers.set(key, { iv: iv, pill: pill, start: start });
       }
       function stopTimer(key) {
         var entry = aiTimers.get(key);
-        if (!entry) return;
+        if (!entry) return '';
         clearInterval(entry.iv);
+        var elapsed = Math.round((Date.now() - entry.start) / 1000);
+        var finalTime = mmss(elapsed);
+        var lbl = entry.pill.querySelector('.timerLbl');
+        if (lbl) lbl.textContent = finalTime;
         entry.pill.classList.add('done');
         aiTimers.delete(key);
+        return finalTime;
       }
       var lastRowLabel = document.getElementById('lastRowLabel');
       const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-' };
@@ -1708,8 +1710,12 @@ export class FlowtestStatusPanel {
         if (isTimerStart && (st === 'in_progress' || st === 'running')) {
           if (tPill) startTimer(tKey, tPill);
         } else if (cm.cls === 'llm' || cm.cls === 'java') {
-          stopTimer(tKey);
-          if (tPill && (st === 'completed' || st === 'success' || st === 'done')) { tPill.classList.remove('hidden'); tPill.classList.add('done'); }
+          var finalTime = stopTimer(tKey);
+          if (tPill && (st === 'completed' || st === 'success' || st === 'done')) {
+            tPill.classList.remove('hidden');
+            tPill.classList.add('done');
+            if (finalTime) { var tLbl = tPill.querySelector('.timerLbl'); if (tLbl) tLbl.textContent = finalTime; }
+          }
         }
         /* Update lastRowLabel */
         if (lastRowLabel) { lastRowLabel.textContent = ev.title || ev.stage || ''; }

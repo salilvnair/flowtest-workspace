@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Component
 @Order(20)
@@ -25,6 +26,7 @@ public class ApiCallStepExecutor implements StepExecutor {
 
     private static final String CONTEXT_BASE_URL = "__flowtest_base_url";
     private static final String CONTEXT_WIREMOCK_ENABLED = "__flowtest_wiremock_enabled";
+    private static final Pattern BASE_URL_TEMPLATE = Pattern.compile("\\{\\{\\s*baseUrl\\s*\\}\\}", Pattern.CASE_INSENSITIVE);
 
     private final RestClient.Builder builder;
     private final ObjectMapper objectMapper;
@@ -105,18 +107,19 @@ public class ApiCallStepExecutor implements StepExecutor {
 
     private String resolveUrl(String rawUrl, ExecutionContext context) {
         if (rawUrl == null) return "";
-        String u = rawUrl.trim();
+        String overrideBase = String.valueOf(context.get(CONTEXT_BASE_URL));
+        String base = (overrideBase == null || overrideBase.isBlank() || "null".equalsIgnoreCase(overrideBase))
+                ? executionBaseUrl
+                : overrideBase;
+        String normalizedBase = base.replaceAll("/+$", "");
+        String u = BASE_URL_TEMPLATE.matcher(rawUrl.trim()).replaceAll(normalizedBase);
         if (u.startsWith("http://") || u.startsWith("https://")) {
             return u;
         }
         if (!u.startsWith("/")) {
             u = "/" + u;
         }
-        String overrideBase = String.valueOf(context.get(CONTEXT_BASE_URL));
-        String base = (overrideBase == null || overrideBase.isBlank() || "null".equalsIgnoreCase(overrideBase))
-                ? executionBaseUrl
-                : overrideBase;
-        return base.replaceAll("/+$", "") + u;
+        return normalizedBase + u;
     }
 
     private int parseStatus(Object value) {

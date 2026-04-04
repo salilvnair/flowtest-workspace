@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -31,6 +32,7 @@ public class ScenarioEngine {
 
     private static final String CONTEXT_BASE_URL = "__flowtest_base_url";
     private static final String CONTEXT_WIREMOCK_ENABLED = "__flowtest_wiremock_enabled";
+    private static final Pattern BASE_URL_TEMPLATE = Pattern.compile("\\{\\{\\s*baseUrl\\s*\\}\\}", Pattern.CASE_INSENSITIVE);
 
     private final StepDispatcher stepDispatcher;
     private final ExecutionEventPublisher eventPublisher;
@@ -142,14 +144,18 @@ public class ScenarioEngine {
     private WireMockServer activeWireMock;
 
     private WireMockRunMetadata bootstrapWireMockIfPossible(TestScenario scenario) {
-        if (scenario.getSteps() == null || scenario.getSteps().isEmpty()) {
-            return WireMockRunMetadata.builder().enabled(false).stubCount(0).build();
-        }
-
-        List<ScenarioStep> apiSteps = scenario.getSteps().stream()
+        List<ScenarioStep> apiSteps = scenario.getSteps() == null
+                ? List.of()
+                : scenario.getSteps().stream()
                 .filter(step -> step != null && ("api-call".equals(step.getType()) || "api-assert".equals(step.getType())))
                 .toList();
-        if (apiSteps.isEmpty()) {
+        List<Map<String, Object>> scenarioMocks = scenario.getMocks() == null
+                ? List.of()
+                : scenario.getMocks().stream()
+                .filter(map -> map != null && !map.isEmpty())
+                .toList();
+
+        if (apiSteps.isEmpty() && scenarioMocks.isEmpty()) {
             return WireMockRunMetadata.builder().enabled(false).stubCount(0).build();
         }
 
@@ -181,6 +187,40 @@ public class ScenarioEngine {
             stubCount++;
         }
 
+        // Also support top-level DSL mocks: { request: { method, url }, response: { status, jsonBody/body, headers } }
+        for (Map<String, Object> mock : scenarioMocks) {
+            Map<String, Object> reqMap = asMap(mock.get("request"));
+            if (reqMap == null) {
+                continue;
+            }
+            String method = String.valueOf(reqMap.getOrDefault("method", "GET")).toUpperCase();
+            String rawUrl = String.valueOf(reqMap.getOrDefault("url", "/"));
+            String path = normalizePath(rawUrl);
+
+            Map<String, Object> resMap = asMap(mock.get("response"));
+            int status = parseStatus(resMap == null ? mock.get("status") : resMap.get("status"));
+            Object bodyValue = extractMockBody(mock, resMap);
+            String body = toJsonString(bodyValue);
+
+            var responseBuilder = aResponse()
+                    .withStatus(status)
+                    .withHeader("Content-Type", "application/json")
+                    .withBody(body);
+
+            Map<String, Object> headers = resMap == null ? null : asMap(resMap.get("headers"));
+            if (headers != null && !headers.isEmpty()) {
+                for (Map.Entry<String, Object> entry : headers.entrySet()) {
+                    if (entry.getKey() == null || entry.getValue() == null) {
+                        continue;
+                    }
+                    responseBuilder.withHeader(entry.getKey(), String.valueOf(entry.getValue()));
+                }
+            }
+
+            server.stubFor(request(method, urlEqualTo(path)).willReturn(responseBuilder));
+            stubCount++;
+        }
+
         if (stubCount == 0) {
             server.stop();
             return WireMockRunMetadata.builder().enabled(false).stubCount(0).build();
@@ -195,11 +235,45 @@ public class ScenarioEngine {
                 .build();
     }
 
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> asMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            Map<String, Object> out = new HashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    out.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            return out;
+        }
+        return null;
+    }
+
+    private Object extractMockBody(Map<String, Object> mock, Map<String, Object> response) {
+        if (response != null) {
+            if (response.get("jsonBody") != null) return response.get("jsonBody");
+            if (response.get("body") != null) return response.get("body");
+            if (response.get("responseBody") != null) return response.get("responseBody");
+            Map<String, Object> copy = new HashMap<>(response);
+            copy.remove("status");
+            copy.remove("headers");
+            if (!copy.isEmpty()) {
+                return copy;
+            }
+        }
+        if (mock.get("body") != null) return mock.get("body");
+        if (mock.get("jsonBody") != null) return mock.get("jsonBody");
+        return Map.of();
+    }
+
     private String normalizePath(String rawUrl) {
         if (rawUrl == null || rawUrl.isBlank()) {
             return "/";
         }
-        String url = rawUrl.trim();
+        String url = BASE_URL_TEMPLATE.matcher(rawUrl.trim()).replaceAll("");
+        if (url.isBlank()) {
+            return "/";
+        }
         try {
             if (url.startsWith("http://") || url.startsWith("https://")) {
                 URI uri = URI.create(url);

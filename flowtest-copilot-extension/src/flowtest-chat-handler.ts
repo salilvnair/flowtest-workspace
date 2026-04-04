@@ -226,8 +226,17 @@ function normalizeScenarioForEngine(input: Record<string, unknown>): {
     steps: mappedSteps
   };
 
+  if ((scenarioCandidate as any).config && typeof (scenarioCandidate as any).config === "object") {
+    scenario.config = (scenarioCandidate as any).config;
+  }
+
   if ((scenarioCandidate as any).data && typeof (scenarioCandidate as any).data === "object") {
     scenario.data = (scenarioCandidate as any).data;
+  }
+
+  if (Array.isArray((scenarioCandidate as any).mocks)) {
+    scenario.mocks = ((scenarioCandidate as any).mocks as Array<unknown>)
+      .filter((m) => !!m && typeof m === "object");
   }
 
   if (errors.length > 0) {
