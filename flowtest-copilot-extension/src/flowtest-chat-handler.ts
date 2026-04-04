@@ -1189,6 +1189,7 @@ async function handleStartCommand(
   }
 
   pushVerbose("ALLURE", "generate_started");
+  stream.progress("Generating Allure report...");
   statusPanel.setSummary({ status: "Running", detail: "Generating Allure report..." });
   const allureReport = await generateAndOpenAllureReport();
   if (allureReport.ok) {

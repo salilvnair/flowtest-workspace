@@ -70,27 +70,12 @@ export async function generateAndOpenAllureReport(): Promise<{
     };
   }
 
-  const open = await runCommand("allure", ["open", reportDir], root);
-  if (open.code !== 0) {
-    return {
-      ok: false,
-      message: "Allure report generated but failed to open via local server.",
-      reportPath: reportIndex,
-      logs: [gen.stdout, open.stdout, open.stderr].filter(Boolean).join("\n")
-    };
-  }
-  const urlMatch = `${open.stdout}\n${open.stderr}`.match(/https?:\/\/[^\s]+/);
-  const reportUrl = urlMatch?.[0];
-  if (reportUrl) {
-    await vscode.env.openExternal(vscode.Uri.parse(reportUrl));
-  }
+  /* Open the report HTML directly in the browser — avoids blocking on `allure open` server */
+  await vscode.env.openExternal(vscode.Uri.file(reportIndex));
   return {
     ok: true,
-    message: reportUrl
-      ? `Allure report opened: ${reportUrl}`
-      : `Allure report opened via local server for: ${reportDir}`,
+    message: `Allure report opened: ${reportIndex}`,
     reportPath: reportIndex,
-    reportUrl,
-    logs: [gen.stdout, open.stdout, open.stderr].filter(Boolean).join("\n")
+    logs: gen.stdout
   };
 }

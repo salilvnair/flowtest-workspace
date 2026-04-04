@@ -651,12 +651,15 @@ export class FlowtestStatusPanel {
     .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
     .actionBtn.file { color: #9be7ff; border-color: color-mix(in srgb, #9be7ff 50%, var(--border)); background: color-mix(in srgb, #9be7ff 16%, transparent); }
     .actionBtn.engine { color: #ffb3a5; border-color: color-mix(in srgb, #ffb3a5 50%, var(--border)); background: color-mix(in srgb, #ffb3a5 16%, transparent); }
-    .summary { padding: 8px 14px 10px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--muted); position: relative; overflow: hidden; background: var(--bg); letter-spacing: 0.15px; line-height: 1.5; }
+    .summary { padding: 8px 14px 12px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--muted); position: relative; overflow: hidden; background: var(--bg); letter-spacing: 0.15px; line-height: 1.5; }
     .summary b { color: var(--fg); font-weight: 700; }
     .summary .summaryDetail { color: color-mix(in srgb, var(--fg) 70%, var(--muted)); font-style: italic; }
-    .summary.thinking .summaryProgress { display: inline; background: linear-gradient(105deg, #8a9bb5 0%, #d0d8e4 40%, #ffffff 50%, #d0d8e4 60%, #8a9bb5 100%); background-size: 200% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: glossyText 2.4s ease-in-out infinite; font-weight: 600; }
-    @keyframes glossyText { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
     .summary.done .summaryStatus { color: #9ef0b7; font-weight: 700; }
+    .statusLabel { font-size: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; letter-spacing: 0.15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; display: inline-block; vertical-align: middle; color: var(--muted); }
+    .statusLabel.thinking { background: linear-gradient(105deg, #8a9bb5 0%, #d0d8e4 40%, #ffffff 50%, #d0d8e4 60%, #8a9bb5 100%); background-size: 200% 100%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: glossyText 2.4s ease-in-out infinite; font-weight: 600; }
+    @keyframes glossyText { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .statusLabel.done { color: #9ef0b7; font-weight: 600; }
+    .statusLabel.fail { color: #ff9db7; font-weight: 600; }
     .lastRowLabel { font-size: 10px; color: color-mix(in srgb, var(--muted) 72%, transparent); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
     .stateComplete { color: #9ef0b7; }
     .stateFail { color: #ff9db7; }
@@ -935,6 +938,7 @@ export class FlowtestStatusPanel {
       <div class="sectionHead">
         <div class="sectionHeadLeft">Live Timeline <button id="timelineCollapseBtn" class="collapseBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
         <div class="sectionHeadRight">
+          <span id="statusLabel" class="statusLabel"></span>
           <span id="lastRowLabel" class="lastRowLabel"></span>
           <button id="fakeRunBtn" class="testBtn" type="button" style="font-size:9px;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid var(--border);background:color-mix(in srgb, var(--card) 84%, transparent);color:var(--muted);">Fake</button>
           <label class="followToggle"><input id="followLogs" type="checkbox" checked /> Follow logs</label>
@@ -1110,6 +1114,7 @@ export class FlowtestStatusPanel {
         return finalTime;
       }
       var lastRowLabel = document.getElementById('lastRowLabel');
+      var statusLabel = document.getElementById('statusLabel');
       const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-' };
 
       function syncChevronState(btn, isCollapsed) {
@@ -1205,24 +1210,44 @@ export class FlowtestStatusPanel {
         }
       }
       function setSummary(status, detail) {
-        if (summary) {
-          var sl = String(status || '').toLowerCase();
-          var isDone = sl.includes('complete') || sl.includes('success');
-          var isFail = sl.includes('fail') || sl.includes('error');
-          var isThinking = !isDone && !isFail && sl !== '-' && sl !== 'cancelled';
+        var sl = String(status || '').toLowerCase();
+        var isDone = sl.includes('complete') || sl.includes('success');
+        var isFail = sl.includes('fail') || sl.includes('error');
+        var isThinking = !isDone && !isFail && sl !== '-' && sl !== 'cancelled';
+
+        /* Header glossy label */
+        if (statusLabel) {
+          statusLabel.classList.remove('thinking', 'done', 'fail');
           if (isThinking) {
             var progressText = detail ? String(detail) : String(status || 'Working...');
             if (!progressText.endsWith('...')) progressText += '...';
-            summary.innerHTML = '<span class="summaryProgress">' + esc(progressText) + '</span>';
+            statusLabel.textContent = progressText;
+            statusLabel.classList.add('thinking');
           } else if (isDone) {
-            summary.innerHTML = '<span class="summaryStatus">' + esc(String(status || 'Completed')) + '</span>' + (detail ? ' <span class="summaryDetail"> — ' + esc(detail) + '</span>' : '');
+            statusLabel.textContent = 'Completed';
+            statusLabel.classList.add('done');
+          } else if (isFail) {
+            statusLabel.textContent = String(status || 'Failed');
+            statusLabel.classList.add('fail');
           } else {
-            summary.innerHTML = '<b>' + esc(String(status || '-')) + '</b>' + (detail ? ' <span class="summaryDetail"> — ' + esc(detail) + '</span>' : '');
+            statusLabel.textContent = '';
           }
-          summary.classList.remove('thinking', 'done');
-          if (isThinking) summary.classList.add('thinking');
-          if (isDone) summary.classList.add('done');
         }
+
+        /* Bottom summary — simple static text */
+        if (summary) {
+          if (isDone) {
+            summary.innerHTML = '<span class="summaryStatus">' + esc(String(status || 'Completed')) + '</span>' + (detail ? ' <span class="summaryDetail"> — ' + esc(detail) + '</span>' : '');
+            summary.classList.add('done');
+          } else if (isFail) {
+            summary.innerHTML = '<b>' + esc(String(status || 'Failed')) + '</b>' + (detail ? ' <span class="summaryDetail"> — ' + esc(detail) + '</span>' : '');
+            summary.classList.remove('done');
+          } else {
+            summary.innerHTML = '<b>Status:</b> ' + esc(String(status || 'Running'));
+            summary.classList.remove('done');
+          }
+        }
+
         if (runState) runState.textContent = String(status || 'Running');
         const s = String(status || '').toLowerCase();
         if (runMetaDockWrap) {
@@ -1699,22 +1724,21 @@ export class FlowtestStatusPanel {
           + expandBtnHtml + '</span></div>'
           + (hasBody ? '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + metaHtml + actionsHtml + '</div>' : '') + '</div>';
         timeline.appendChild(row);
-        /* Timer logic — only for LLM dispatched→received and Java started→completed */
+        /* Timer logic — LLM + Java: start on in_progress/running, stop on completed */
         var tKey = stageKey(ev);
         var tPill = row.querySelector('.timerPill');
-        var evTitle = String(ev.title || '').toLowerCase();
         var st = String(ev.status || '').toLowerCase();
-        var isLlmStart = cm.cls === 'llm' && (evTitle.includes('dispatch') || evTitle.includes('request'));
-        var isJavaStart = cm.cls === 'java' && (st === 'in_progress' || st === 'running' || evTitle.includes('start') || evTitle.includes('executing'));
-        var isTimerStart = isLlmStart || isJavaStart;
-        if (isTimerStart && (st === 'in_progress' || st === 'running')) {
+        var isTimerStage = cm.cls === 'llm' || cm.cls === 'java';
+        var isStart = st === 'in_progress' || st === 'running';
+        var isEnd = st === 'completed' || st === 'success' || st === 'done';
+        if (isTimerStage && isStart) {
           if (tPill) startTimer(tKey, tPill);
-        } else if (cm.cls === 'llm' || cm.cls === 'java') {
+        } else if (isTimerStage && isEnd) {
           var finalTime = stopTimer(tKey);
-          if (tPill && (st === 'completed' || st === 'success' || st === 'done')) {
+          if (tPill && finalTime) {
             tPill.classList.remove('hidden');
             tPill.classList.add('done');
-            if (finalTime) { var tLbl = tPill.querySelector('.timerLbl'); if (tLbl) tLbl.textContent = finalTime; }
+            var tLbl = tPill.querySelector('.timerLbl'); if (tLbl) tLbl.textContent = finalTime;
           }
         }
         /* Update lastRowLabel */
