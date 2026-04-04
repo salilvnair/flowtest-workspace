@@ -651,7 +651,7 @@ export class FlowtestStatusPanel {
     .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
     .actionBtn.file { color: #9be7ff; border-color: color-mix(in srgb, #9be7ff 50%, var(--border)); background: color-mix(in srgb, #9be7ff 16%, transparent); }
     .actionBtn.engine { color: #ffb3a5; border-color: color-mix(in srgb, #ffb3a5 50%, var(--border)); background: color-mix(in srgb, #ffb3a5 16%, transparent); }
-    .summary { padding: 8px 14px 12px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--muted); position: relative; overflow: hidden; background: var(--bg); letter-spacing: 0.15px; line-height: 1.5; }
+    .summary { margin: 10px; padding: 15px; padding-bottom: 30px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: var(--muted); position: relative; overflow: hidden; background: var(--bg); letter-spacing: 0.15px; line-height: 1.5; }
     .summary b { color: var(--fg); font-weight: 700; }
     .summary .summaryDetail { color: color-mix(in srgb, var(--fg) 70%, var(--muted)); font-style: italic; }
     .summary.done .summaryStatus { color: #9ef0b7; font-weight: 700; }
