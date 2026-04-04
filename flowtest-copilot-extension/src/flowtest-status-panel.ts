@@ -80,6 +80,10 @@ export class FlowtestStatusPanel {
     this.panel.iconPath = vscode.Uri.joinPath(extensionUri, "images", "flowtest_bot.svg");
     this.panel.webview.onDidReceiveMessage((msg) => {
       console.log("[FlowTestStatusPanel] from webview:", msg);
+      if (msg?.type === "webviewError") {
+        console.error("[FlowTestStatusPanel] webview runtime error:", msg?.payload);
+        return;
+      }
       if (msg?.type === "ready") {
         this.webviewReady = true;
         console.log("[FlowTestStatusPanel] webview ready -> flushState");
@@ -99,7 +103,8 @@ export class FlowtestStatusPanel {
     this.panel.webview.html = html;
     setTimeout(() => {
       if (!this.webviewReady) {
-        console.error("[FlowTestStatusPanel] no ready handshake; keeping main UI (fallback auto-switch disabled)");
+        console.error("[FlowTestStatusPanel] no ready handshake; switching to fallback UI");
+        this.switchToFallbackUi();
       }
     }, 5000);
     this.panel.onDidDispose(() => {
@@ -169,6 +174,15 @@ export class FlowtestStatusPanel {
     if (this.summary) {
       this.postNow("summary", this.summary);
     }
+  }
+
+  private switchToFallbackUi(): void {
+    if (this.fallbackMode) {
+      return;
+    }
+    this.fallbackMode = true;
+    this.webviewReady = false;
+    this.panel.webview.html = this.getFallbackHtml();
   }
 
   private getHtml(): string {
@@ -633,10 +647,41 @@ export class FlowtestStatusPanel {
     .summary b { color: var(--fg); }
     .stateComplete { color: #9ef0b7; }
     .stateFail { color: #ff9db7; }
-    .modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.48); display: none; align-items: center; justify-content: center; padding: 18px; z-index: 99; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(900px 340px at 50% -20%, color-mix(in srgb, var(--info) 14%, transparent), transparent 64%),
+        rgba(0, 0, 0, 0.58);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 99;
+      backdrop-filter: blur(3px);
+    }
     .modal.open { display: flex; }
-    .modalCard { width: min(100%, 980px); max-height: 84vh; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
-    .modalHead { padding: 8px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .modalCard {
+      width: min(100%, 1020px);
+      max-height: 84vh;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 12px;
+      background:
+        linear-gradient(170deg, color-mix(in srgb, var(--card) 94%, #1f242c), color-mix(in srgb, var(--bg) 96%, #191f27));
+      box-shadow: 0 20px 44px rgba(0,0,0,0.42), 0 1px 0 color-mix(in srgb, white 8%, transparent) inset;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modalHead {
+      padding: 8px 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--card) 88%, transparent), color-mix(in srgb, var(--bg) 96%, transparent));
+    }
     .modalTitle { font-weight: 800; font-size: 12px; }
     .modalActions { display: inline-flex; align-items: center; gap: 6px; }
     .closeBtn { border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--card) 86%, transparent); color: var(--fg); font-size: 11px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; width: max-content; }
@@ -657,9 +702,59 @@ export class FlowtestStatusPanel {
       50% { opacity: 1; }
       100% { opacity: 0.75; }
     }
-    .modalBody { margin: 0; padding: 10px; overflow: auto; white-space: normal; word-break: normal; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; color: var(--fg); background: color-mix(in srgb, var(--card) 74%, transparent); flex: 1 1 auto; min-height: 0; }
-    .codeFrame { margin: 0; border-radius: 8px; border: 1px solid var(--border); overflow: auto; background: #0d1117; }
-    .codeFrame code { display: block; padding: 12px; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; line-height: 1.45; white-space: pre; }
+    .modalBody {
+      margin: 0;
+      padding: 10px;
+      overflow: auto;
+      white-space: normal;
+      word-break: normal;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 12px;
+      color: var(--fg);
+      background: #11161d;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    .codeLang {
+      display: inline-flex;
+      align-items: center;
+      margin-bottom: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      color: #9fd1ff;
+      background: color-mix(in srgb, #9fd1ff 16%, transparent);
+      text-transform: uppercase;
+    }
+    .codeFrame {
+      margin: 0;
+      width: max-content;
+      min-width: 100%;
+      border-radius: 8px;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      overflow: auto;
+      background: #0d1117;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset;
+    }
+    .codeFrame code {
+      display: block;
+      padding: 12px;
+      font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre;
+      color: #d4dee9;
+      tab-size: 2;
+    }
+    .tok-key { color: #79c0ff; }
+    .tok-str { color: #a5d6ff; }
+    .tok-num { color: #f2cc8f; }
+    .tok-bool { color: #c3a6ff; }
+    .tok-null { color: #8b949e; font-style: italic; }
+    .tok-punc { color: #9aa4b0; }
     .codeLang { margin-bottom: 6px; display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; font-size: 10px; color: #9fd1ff; background: color-mix(in srgb, #9fd1ff 16%, transparent); text-transform: uppercase; font-weight: 700; letter-spacing: 0.2px; }
   </style>
 </head>
@@ -748,315 +843,28 @@ export class FlowtestStatusPanel {
   </div>
   <script>
     const vscodeApi = acquireVsCodeApi();
+    function reportWebviewError(kind, err) {
+      const payload = {
+        kind: String(kind || 'error'),
+        message: String((err && err.message) || err || 'unknown'),
+        stack: String((err && err.stack) || '')
+      };
+      try { console.error('[FlowTestStatusPanel:webview]', payload); } catch {}
+      try { vscodeApi.postMessage({ type: 'webviewError', payload }); } catch {}
+    }
+    window.addEventListener('error', (event) => reportWebviewError('window.error', event && (event.error || event.message)));
+    window.addEventListener('unhandledrejection', (event) => reportWebviewError('window.unhandledrejection', event && event.reason));
+
     let readySent = false;
     function sendReadyOnce() {
       if (readySent) return;
       readySent = true;
       vscodeApi.postMessage({ type: 'ready' });
     }
-    sendReadyOnce();
-    const panelStack = document.querySelector('.panelStack');
-    const timeline = document.getElementById('timeline');
-    const timelineSection = document.getElementById('timelineSection');
-    const runCenterSection = document.getElementById('runCenterSection');
-    const sectionDivider = document.getElementById('sectionDivider');
-    const timelineCollapseBtn = document.getElementById('timelineCollapseBtn');
-    const runCenterCollapseBtn = document.getElementById('runCenterCollapseBtn');
-    const followLogs = document.getElementById('followLogs');
-    const fakeTimelineBtn = document.getElementById('fakeTimelineBtn');
-    const runState = document.getElementById('runState');
-    const runMetaWrap = document.getElementById('runMeta');
-    const runMetaDockWrap = document.getElementById('runMetaDockWrap');
-    const runMetaDock = document.getElementById('runMetaDock');
-    const runMetaDockGrid = document.getElementById('runMetaDockGrid');
-    const runMetaDockLauncher = document.getElementById('runMetaDockLauncher');
-    const runMetaDockHead = document.querySelector('.runMetaDockHead');
-    const runMetaDockClose = document.getElementById('runMetaDockClose');
-    const summary = document.getElementById('summary');
-    const detailModal = document.getElementById('detailModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalBody = document.getElementById('modalBody');
-    const modalCloseBtn = document.getElementById('modalCloseBtn');
-    const modalCopyBtn = document.getElementById('modalCopyBtn');
-    const modalDownloadBtn = document.getElementById('modalDownloadBtn');
-    const detailStore = new Map();
-    const aiTimers = new Map();
-    let detailId = 0;
-    let modalText = '';
-    let modalName = 'detail';
-    let dividerDrag = null;
-    let manualRunHeight = null;
-    let dockDrag = null;
-    let dockOffsetX = 0;
-    let dockOffsetY = 0;
-    const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-', allureGenerateCommand: '-' };
-    function applyDockTransform() {
-      runMetaDockWrap.style.transform = 'translate(' + dockOffsetX + 'px, ' + dockOffsetY + 'px)';
-    }
-    function getRunCenterNaturalHeight() {
-      const head = runCenterSection.querySelector('.sectionHead');
-      const body = runCenterSection.querySelector('.sectionBody');
-      if (!head || !body) {
-        return Math.round(runCenterSection.getBoundingClientRect().height);
-      }
-      const sectionStyles = getComputedStyle(runCenterSection);
-      const borderTop = parseFloat(sectionStyles.borderTopWidth || '0') || 0;
-      const borderBottom = parseFloat(sectionStyles.borderBottomWidth || '0') || 0;
-      const headHeight = head.getBoundingClientRect().height;
-      const bodyNatural = body.scrollHeight;
-      return Math.ceil(headHeight + bodyNatural + borderTop + borderBottom);
-    }
+
     function esc(s) {
       return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
-    function asMetaText(v) {
-      const raw = String(v || '-').trim();
-      return raw ? raw : '-';
-    }
-    function metaCopyButton(copyValue) {
-      if (!copyValue || copyValue === '-') {
-        return '';
-      }
-      return '<button class="metaCopyBtn" type="button" data-copy="' + esc(copyValue) + '" title="Copy">' +
-        '<svg class="metaCopy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h9a2 2 0 0 1 2 2v1"></path></svg>' +
-        '<svg class="metaCheck" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>' +
-      '</button>';
-    }
-    function metaHtml() {
-      const run = asMetaText(meta.runName);
-      const orchestration = asMetaText(meta.orchestrationId);
-      return '<div class="metaChip"><span class="mk">Run</span><span class="mv"><span class="metaValueText">' + esc(run) + '</span>' + metaCopyButton(run) + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Orchestration</span><span class="mv"><span class="metaValueText">' + esc(orchestration) + '</span>' + metaCopyButton(orchestration) + '</span></div>';
-    }
-    function renderMetaDock() {
-      const temporal = String(meta.temporalLink || '-');
-      const outputPath = String(meta.outputPath || '-');
-      const wiremock = String(meta.wiremockBaseUrl || '-');
-      const allureResults = String(meta.allureResultsPath || '-');
-      const allureReport = String(meta.allureReportPath || '-');
-      const temporalView = temporal && temporal !== '-'
-        ? '<a href="#" data-open-url="' + esc(temporal) + '">' + esc(temporal) + '</a>'
-        : '<span class="runMetaDockValText">-</span>';
-      const outputView = '<span class="runMetaDockValText">' + esc(outputPath) + '</span>';
-      const wiremockView = '<span class="runMetaDockValText">' + esc(wiremock) + '</span>';
-      const allureResultsView = '<span class="runMetaDockValText">' + esc(allureResults) + '</span>';
-      const allureReportView = '<span class="runMetaDockValText">' + esc(allureReport) + '</span>';
-      const keyIcon = {
-        temporal: '<svg viewBox="0 0 24 24"><path d="M3 12h18"></path><path d="M12 3v18"></path><circle cx="12" cy="12" r="8"></circle></svg>',
-        output: '<svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h16"></path></svg>',
-        wiremock: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 12h8"></path><path d="M16.6 7.4l-5.2 3.2"></path><path d="M11.4 13.4l5.2 3.2"></path></svg>',
-        allureResults: '<svg viewBox="0 0 24 24"><path d="M4 20h16"></path><path d="M7 16v-5"></path><path d="M12 16V8"></path><path d="M17 16v-3"></path></svg>',
-        allureReport: '<svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6z"></path><path d="M15 3v5h5"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg>'
-      };
-      runMetaDockGrid.innerHTML =
-        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.temporal + 'Temporal</div><div class="runMetaDockVal">' + temporalView + metaCopyButton(temporal) + '</div></div>' +
-        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.output + 'Output Path</div><div class="runMetaDockVal">' + outputView + metaCopyButton(outputPath) + '</div></div>' +
-        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.wiremock + 'WireMock Base URL</div><div class="runMetaDockVal">' + wiremockView + metaCopyButton(wiremock) + '</div></div>' +
-        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.allureResults + 'Allure Results</div><div class="runMetaDockVal">' + allureResultsView + metaCopyButton(allureResults) + '</div></div>' +
-        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.allureReport + 'Allure Report</div><div class="runMetaDockVal">' + allureReportView + metaCopyButton(allureReport) + '</div></div>';
-    }
-    function renderMeta() {
-      document.getElementById('runMeta').innerHTML = metaHtml();
-      renderMetaDock();
-    }
-    function syncChevronState(btn, isCollapsed) {
-      if (!btn) return;
-      btn.classList.toggle('is-collapsed', Boolean(isCollapsed));
-      btn.setAttribute('aria-expanded', String(!isCollapsed));
-    }
-    document.getElementById('runMeta').addEventListener('click', async (event) => {
-      const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
-      if (copyBtn) {
-        const copyValue = copyBtn.getAttribute('data-copy') || '';
-        try { await navigator.clipboard.writeText(copyValue); } catch {}
-        copyBtn.classList.remove('copied');
-        void copyBtn.offsetWidth;
-        copyBtn.classList.add('copied');
-        setTimeout(() => copyBtn.classList.remove('copied'), 850);
-        return;
-      }
-      const link = event.target && event.target.closest ? event.target.closest('.metaValueLink[data-open-url]') : null;
-      if (link) {
-        event.preventDefault();
-        const url = link.getAttribute('data-open-url') || '';
-        vscodeApi.postMessage({ type: 'openExternal', url });
-      }
-    });
-    runMetaDock.addEventListener('click', (event) => {
-      const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
-      if (copyBtn) {
-        event.preventDefault();
-        const copyValue = copyBtn.getAttribute('data-copy') || '';
-        navigator.clipboard.writeText(copyValue).catch(() => {});
-        copyBtn.classList.remove('copied');
-        void copyBtn.offsetWidth;
-        copyBtn.classList.add('copied');
-        setTimeout(() => copyBtn.classList.remove('copied'), 850);
-        return;
-      }
-      const link = event.target && event.target.closest ? event.target.closest('[data-open-url]') : null;
-      if (!link) return;
-      event.preventDefault();
-      const url = link.getAttribute('data-open-url') || '';
-      vscodeApi.postMessage({ type: 'openExternal', url });
-    });
-    runMetaDockClose.addEventListener('mousedown', (event) => {
-      event.stopPropagation();
-    });
-    runMetaDockClose.addEventListener('click', (event) => {
-      event.stopPropagation();
-      runMetaDockWrap.classList.add('collapsed');
-      runMetaDockLauncher.classList.add('show');
-    });
-    runMetaDockLauncher.addEventListener('click', () => {
-      runMetaDockWrap.classList.remove('collapsed');
-      runMetaDockWrap.classList.add('show');
-      runMetaDockLauncher.classList.remove('show');
-    });
-    runMetaDockHead.addEventListener('mousedown', (event) => {
-      if (!runMetaDockWrap.classList.contains('show') || runMetaDockWrap.classList.contains('collapsed')) return;
-      dockDrag = { startX: event.clientX, startY: event.clientY, baseX: dockOffsetX, baseY: dockOffsetY };
-      runMetaDockWrap.classList.add('dragging');
-      event.preventDefault();
-    });
-    timeline.addEventListener('click', (event) => {
-      const btn = event.target && event.target.closest ? event.target.closest('.expandBtn') : null;
-      if (!btn) return;
-      const row = btn.closest('.event');
-      if (!row) return;
-      row.classList.toggle('compact');
-      syncChevronState(btn, row.classList.contains('compact'));
-      btn.setAttribute('title', row.classList.contains('compact') ? 'Expand' : 'Collapse');
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    function updateLayout() {
-      const rc = runCenterSection.classList.contains('collapsed');
-      const tl = timelineSection.classList.contains('collapsed');
-      sectionDivider.style.display = (!rc && !tl) ? 'block' : 'none';
-      runCenterSection.classList.remove('grow');
-      timelineSection.classList.remove('grow');
-      if (rc && tl) {
-        runCenterSection.style.flex = '0 0 auto';
-        timelineSection.style.flex = '0 0 auto';
-        return;
-      }
-      if (rc && !tl) {
-        runCenterSection.style.flex = '0 0 auto';
-        timelineSection.style.flex = '1 1 auto';
-        timelineSection.classList.add('grow');
-        return;
-      }
-      if (tl && !rc) {
-        timelineSection.style.flex = '0 0 auto';
-        runCenterSection.style.flex = '0 0 auto';
-        return;
-      }
-      if (!rc && !tl) {
-        if (manualRunHeight && manualRunHeight > 0) {
-          runCenterSection.style.flex = '0 0 ' + Math.round(manualRunHeight) + 'px';
-          timelineSection.style.flex = '1 1 auto';
-        } else {
-          runCenterSection.style.flex = '0 0 auto';
-          timelineSection.style.flex = '1 1 auto';
-        }
-        timelineSection.classList.add('grow');
-      }
-    }
-    sectionDivider.addEventListener('mousedown', (e) => {
-      if (runCenterSection.classList.contains('collapsed') || timelineSection.classList.contains('collapsed')) return;
-      const runRect = runCenterSection.getBoundingClientRect();
-      const stackRect = panelStack.getBoundingClientRect();
-      dividerDrag = {
-        startY: e.clientY,
-        startRun: runRect.height,
-        stackH: stackRect.height,
-        naturalRun: getRunCenterNaturalHeight()
-      };
-      sectionDivider.classList.add('dragging');
-      e.preventDefault();
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (dockDrag) {
-        const nextX = dockDrag.baseX + (e.clientX - dockDrag.startX);
-        const nextY = dockDrag.baseY + (e.clientY - dockDrag.startY);
-        const margin = 36;
-        const clampX = Math.max(-(window.innerWidth - margin), Math.min(window.innerWidth - margin, nextX));
-        const clampY = Math.max(-(window.innerHeight - margin), Math.min(window.innerHeight - margin, nextY));
-        dockOffsetX = clampX;
-        dockOffsetY = clampY;
-        applyDockTransform();
-      }
-      if (!dividerDrag) return;
-      const delta = e.clientY - dividerDrag.startY;
-      const minTop = 180;
-      const minBottom = 220;
-      const maxTop = Math.max(minTop, dividerDrag.stackH - minBottom - sectionDivider.offsetHeight);
-      const desiredTop = Math.max(minTop, Math.min(maxTop, dividerDrag.startRun + delta));
-      const naturalTop = Math.max(minTop, Math.round(dividerDrag.naturalRun || getRunCenterNaturalHeight()));
-      const nextTop = Math.min(desiredTop, naturalTop);
-      runCenterSection.style.flex = '0 0 ' + nextTop + 'px';
-      timelineSection.style.flex = '1 1 auto';
-    });
-    window.addEventListener('mouseup', () => {
-      if (dockDrag) {
-        dockDrag = null;
-        runMetaDockWrap.classList.remove('dragging');
-      }
-      if (!dividerDrag) return;
-      const m = /^0 0 ([0-9]+)px$/.exec(String(runCenterSection.style.flex || ''));
-      manualRunHeight = m ? Number(m[1]) : manualRunHeight;
-      dividerDrag = null;
-      sectionDivider.classList.remove('dragging');
-    });
-    runCenterCollapseBtn.addEventListener('click', () => {
-      runCenterSection.classList.toggle('collapsed');
-      syncChevronState(runCenterCollapseBtn, runCenterSection.classList.contains('collapsed'));
-      updateLayout();
-    });
-    timelineCollapseBtn.addEventListener('click', () => {
-      timelineSection.classList.toggle('collapsed');
-      syncChevronState(timelineCollapseBtn, timelineSection.classList.contains('collapsed'));
-      updateLayout();
-    });
-    modalCloseBtn.addEventListener('click', () => detailModal.classList.remove('open'));
-    modalCopyBtn.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(modalText || ''); } catch {}
-      modalCopyBtn.classList.remove('copied');
-      void modalCopyBtn.offsetWidth;
-      modalCopyBtn.classList.add('copied');
-      setTimeout(() => modalCopyBtn.classList.remove('copied'), 900);
-    });
-    modalDownloadBtn.addEventListener('click', () => {
-      modalDownloadBtn.classList.remove('downloading');
-      void modalDownloadBtn.offsetWidth;
-      modalDownloadBtn.classList.add('downloading');
-      const blob = new Blob([modalText || ''], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = (modalName || 'detail').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.txt';
-      a.click();
-      URL.revokeObjectURL(url);
-      setTimeout(() => modalDownloadBtn.classList.remove('downloading'), 600);
-    });
-    function mmss(s){ s=Math.max(0,s|0); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
-    function stageKey(stage){ return String(stage||'').toLowerCase().trim(); }
-    function actionClass(label) {
-      const l = String(label || '').toLowerCase();
-      if (l.includes('ai')) return 'ai';
-      if (l.includes('engine')) return 'engine';
-      return 'file';
-    }
-    function actionIcon(label) {
-      const l = String(label || '').toLowerCase();
-      if (l.includes('ai')) return '{}';
-      if (l.includes('engine')) return '▶';
-      if (l.includes('dsl')) return '◇';
-      if (l.includes('mock')) return '◈';
-      return '▦';
-    }
-    function stageCls(stage){ return String(stage || '').toLowerCase().replace(/\s+/g, '-'); }
     function statusMeta(status) {
       const s = String(status || '').toLowerCase();
       if (s === 'running') return { cls: 'run', text: '● Running' };
@@ -1071,142 +879,246 @@ export class FlowtestStatusPanel {
       if (s === 'engine run') return { cls: 'java', text: 'Java' };
       return { cls: 'vscode', text: 'VS Code Copilot' };
     }
-    function isLowSignalEvent(ev) {
-      const stage = String(ev && ev.stage || '').toLowerCase().trim();
-      const title = String(ev && ev.title || '').toLowerCase().trim();
-      if (
-        title === 'webview ready' ||
-        title === 'started' ||
-        title === 'status panel initialized' ||
-        title === 'ai response received' ||
-        title === 'ai request received' ||
-        title === 'ai request dispatched' ||
-        title.includes('ai request') ||
-        title.includes('ai response') ||
-        title === 'completed'
-      ) return true;
-      if (stage === 'ui' && (title.includes('ready') || title.includes('initialized') || title.includes('started'))) return true;
-      return false;
+    function stageCls(stage) {
+      return String(stage || '').toLowerCase().replace(/\s+/g, '-');
     }
-    function startTimer(stage, node){
-      const k = stageKey(stage);
-      const old = aiTimers.get(k); if (old && old.id) clearInterval(old.id);
-      const started = Date.now();
-      node.classList.remove('hidden','done');
-      const text = node.querySelector('.timerText');
-      text.textContent = '⏱ 00:00';
-      const id = setInterval(() => { text.textContent = '⏱ ' + mmss(Math.floor((Date.now()-started)/1000)); }, 1000);
-      aiTimers.set(k, { started, id, node });
-    }
-    function stopTimer(stage){
-      const k = stageKey(stage);
-      const t = aiTimers.get(k); if (!t) return;
-      if (t.id) clearInterval(t.id);
-      const sec = Math.floor((Date.now()-t.started)/1000);
-      const text = t.node.querySelector('.timerText');
-      text.textContent = '⏱ ' + mmss(sec);
-      t.node.classList.add('done');
-      aiTimers.delete(k);
-    }
-    function addEvent(ev){
-      const row = document.createElement('div');
-      row.className = 'event compact';
-      if (isLowSignalEvent(ev)) row.classList.add('lowSignal');
-      const sm = statusMeta(ev.status);
-      const cm = controlForStage(ev.stage);
-      const sc = stageCls(ev.stage);
-      const idPrefix = 'd_' + (++detailId);
-      const actions = [];
-      if (Array.isArray(ev.actions)) {
-        for (let i=0;i<ev.actions.length;i++){
-          const a = ev.actions[i];
-          const id = idPrefix + '_' + i;
-          detailStore.set(id, { title: a.title || a.label || 'Details', content: a.content || '' });
-          const cls = actionClass(a.label);
-          const icon = actionIcon(a.label);
-          actions.push('<button class="actionBtn ' + cls + '" data-id="' + id + '" type="button">' + icon + ' ' + (a.label || 'View') + '</button>');
+
+    try {
+      const timeline = document.getElementById('timeline');
+      const summary = document.getElementById('summary');
+      const runState = document.getElementById('runState');
+      const runMeta = document.getElementById('runMeta');
+      const successCount = document.getElementById('successCount');
+      const failureCount = document.getElementById('failureCount');
+      const intakeMode = document.getElementById('intakeMode');
+      const runCenterSection = document.getElementById('runCenterSection');
+      const timelineSection = document.getElementById('timelineSection');
+      const runCenterCollapseBtn = document.getElementById('runCenterCollapseBtn');
+      const timelineCollapseBtn = document.getElementById('timelineCollapseBtn');
+      const sectionDivider = document.getElementById('sectionDivider');
+      const followLogs = document.getElementById('followLogs');
+      const runMetaDockWrap = document.getElementById('runMetaDockWrap');
+      const runMetaDockGrid = document.getElementById('runMetaDockGrid');
+      const runMetaDock = document.getElementById('runMetaDock');
+      const runMetaDockClose = document.getElementById('runMetaDockClose');
+      const runMetaDockLauncher = document.getElementById('runMetaDockLauncher');
+      const detailModal = document.getElementById('detailModal');
+      const modalTitle = document.getElementById('modalTitle');
+      const modalBody = document.getElementById('modalBody');
+      const modalCloseBtn = document.getElementById('modalCloseBtn');
+      const modalCopyBtn = document.getElementById('modalCopyBtn');
+      const modalDownloadBtn = document.getElementById('modalDownloadBtn');
+
+      const detailStore = new Map();
+      let detailId = 0;
+      let modalName = 'detail';
+      let modalText = '';
+      let modalLang = 'text';
+      const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-' };
+
+      function syncChevronState(btn, isCollapsed) {
+        if (!btn) return;
+        btn.classList.toggle('is-collapsed', Boolean(isCollapsed));
+        btn.setAttribute('aria-expanded', String(!isCollapsed));
+      }
+      function updateLayout() {
+        const rc = runCenterSection && runCenterSection.classList.contains('collapsed');
+        const tl = timelineSection && timelineSection.classList.contains('collapsed');
+        if (sectionDivider) sectionDivider.style.display = (!rc && !tl) ? 'block' : 'none';
+        if (rc && !tl && timelineSection) timelineSection.style.flex = '1 1 auto';
+        if (tl && !rc && runCenterSection) runCenterSection.style.flex = '0 0 auto';
+      }
+      function metaCopyButton(copyValue) {
+        if (!copyValue || copyValue === '-') return '';
+        return '<button class="metaCopyBtn" type="button" data-copy="' + esc(copyValue) + '" title="Copy">'
+          + '<svg class="metaCopy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h9a2 2 0 0 1 2 2v1"></path></svg>'
+          + '<svg class="metaCheck" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"></path></svg>'
+          + '</button>';
+      }
+      function renderMeta() {
+        if (runMeta) {
+          runMeta.innerHTML =
+            '<div class="metaChip"><span class="mk">Run</span><span class="mv"><span class="metaValueText">' + esc(meta.runName || '-') + '</span>' + metaCopyButton(meta.runName) + '</span></div>'
+            + '<div class="metaChip"><span class="mk">Orchestration</span><span class="mv"><span class="metaValueText">' + esc(meta.orchestrationId || '-') + '</span>' + metaCopyButton(meta.orchestrationId) + '</span></div>';
+        }
+        if (runMetaDockGrid) {
+          const temporal = String(meta.temporalLink || '-');
+          const temporalView = temporal !== '-' ? '<a href="#" data-open-url="' + esc(temporal) + '">' + esc(temporal) + '</a>' : '<span class="runMetaDockValText">-</span>';
+          runMetaDockGrid.innerHTML =
+            '<div class="runMetaDockItem"><div class="runMetaDockKey">Temporal</div><div class="runMetaDockVal">' + temporalView + metaCopyButton(temporal) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">Output Path</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.outputPath || '-') + '</span>' + metaCopyButton(meta.outputPath) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">WireMock Base URL</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.wiremockBaseUrl || '-') + '</span>' + metaCopyButton(meta.wiremockBaseUrl) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">Allure Results</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.allureResultsPath || '-') + '</span>' + metaCopyButton(meta.allureResultsPath) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">Allure Report</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.allureReportPath || '-') + '</span>' + metaCopyButton(meta.allureReportPath) + '</div></div>';
         }
       }
-      row.innerHTML =
-        '<span class="dot"></span><div>' +
-        '<div class="rowTop"><span class="time">' + (ev.time || '') + '</span>' +
-        '<span class="stageTag ' + sc + '">' + (ev.stage || '') + '</span>' +
-        '<span class="statusPill ' + sm.cls + '">' + sm.text + '</span>' +
-        '<span class="controlChip ' + cm.cls + '">' + cm.text + '</span>' +
-        '<span class="titleWrap"><span class="title">' + (ev.title || '') + '</span>' +
-        '<button class="expandBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>' +
-        '<span class="timerPill hidden"><span class="timerDot"></span><span class="timerText">⏱ 00:00</span></span></span></div>' +
-        '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + ev.detail + '</div>' : '') + (actions.length ? '<div class="actions">' + actions.join('') + '</div>' : '') + '</div></div>';
-      timeline.appendChild(row);
-      const rowExpandBtn = row.querySelector('.expandBtn');
-      const syncRowExpandState = () => {
-        const isCompact = row.classList.contains('compact');
-        syncChevronState(rowExpandBtn, isCompact);
-        rowExpandBtn.setAttribute('title', isCompact ? 'Expand' : 'Collapse');
-      };
-      syncRowExpandState();
-      row.querySelectorAll('.actionBtn').forEach((b) => b.addEventListener('click', () => {
-        const p = detailStore.get(b.getAttribute('data-id')); if (!p) return;
-        modalName = p.title; modalText = p.content;
-        modalTitle.textContent = modalName;
-        modalBody.innerHTML = '<pre class="codeFrame"><code>' + String(modalText).replace(/</g, '&lt;') + '</code></pre>';
-        detailModal.classList.add('open');
-      }));
-      const title = String(ev.title || '').toLowerCase();
-      const timer = row.querySelector('.timerPill');
-      if (title.includes('ai request dispatched')) startTimer(ev.stage, timer);
-      if (title.includes('ai response received') || title.includes('completed') || title.includes('failed')) stopTimer(ev.stage);
-      if (followLogs.checked) timeline.scrollTop = timeline.scrollHeight;
-    }
-    function setSummary(status, detail){
-      summary.innerHTML = '<b>Status:</b> ' + (status || '-') + (detail ? (' — ' + detail) : '');
-      runState.textContent = String(status || 'Running');
-      runState.classList.remove('stateComplete','stateFail');
-      const s = String(status || '').toLowerCase();
-      if (s.includes('fail')) runState.classList.add('stateFail');
-      if (s.includes('complete') || s.includes('success')) runState.classList.add('stateComplete');
-      const isDone = s.includes('complete') || s.includes('success');
-      runMetaDockWrap.classList.toggle('show', isDone);
-      if (!isDone) {
-        runMetaDockWrap.classList.remove('collapsed');
+      function setSummary(status, detail) {
+        if (summary) summary.innerHTML = '<b>Status:</b> ' + (status || '-') + (detail ? (' — ' + detail) : '');
+        if (runState) runState.textContent = String(status || 'Running');
+        const s = String(status || '').toLowerCase();
+        if (runMetaDockWrap) {
+          const done = s.includes('complete') || s.includes('success');
+          runMetaDockWrap.classList.toggle('show', done);
+          if (!done) runMetaDockWrap.classList.remove('collapsed');
+          if (runMetaDockLauncher) runMetaDockLauncher.classList.toggle('show', done && runMetaDockWrap.classList.contains('collapsed'));
+        }
+      }
+      function detectLang(content, hint) {
+        const h = String(hint || '').toLowerCase().trim();
+        if (h) return h;
+        const t = String(content || '').trim();
+        if (t.startsWith('{') || t.startsWith('[')) return 'json';
+        if (t.startsWith('<')) return 'xml';
+        return 'text';
+      }
+      function renderModalContent(content, title) {
+        const text = String(content || '');
+        modalLang = detectLang(text, title);
+        if (modalLang === 'json') {
+          try { modalText = JSON.stringify(JSON.parse(text), null, 2); }
+          catch { modalText = text; }
+        } else {
+          modalText = text;
+        }
+        const label = modalLang.toUpperCase();
+        if (modalBody) modalBody.innerHTML = '<div class="codeLang">' + esc(label) + '</div><pre class="codeFrame"><code>' + esc(modalText) + '</code></pre>';
+      }
+      function addEvent(ev) {
+        if (!timeline) return;
+        const sm = statusMeta(ev.status);
+        const cm = controlForStage(ev.stage);
+        const sc = stageCls(ev.stage);
+        const row = document.createElement('div');
+        row.className = 'event compact';
+        let actionsHtml = '';
+        if (Array.isArray(ev.actions) && ev.actions.length > 0) {
+          const arr = [];
+          for (let i = 0; i < ev.actions.length; i++) {
+            const a = ev.actions[i];
+            const id = 'd_' + (++detailId);
+            detailStore.set(id, { title: a.title || a.label || 'Details', content: a.content || '' });
+            arr.push('<button class="actionBtn" data-id="' + id + '" type="button">' + esc(a.label || 'View') + '</button>');
+          }
+          actionsHtml = '<div class="actions">' + arr.join('') + '</div>';
+        }
+        row.innerHTML =
+          '<span class="dot"></span><div>'
+          + '<div class="rowTop"><span class="time">' + esc(ev.time || '') + '</span>'
+          + '<span class="stageTag ' + sc + '">' + esc(ev.stage || '') + '</span>'
+          + '<span class="statusPill ' + sm.cls + '">' + sm.text + '</span>'
+          + '<span class="controlChip ' + cm.cls + '">' + cm.text + '</span>'
+          + '<span class="titleWrap"><span class="title">' + esc(ev.title || '') + '</span>'
+          + '<button class="expandBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></span></div>'
+          + '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + actionsHtml + '</div></div>';
+        timeline.appendChild(row);
+        if (followLogs && followLogs.checked) timeline.scrollTop = timeline.scrollHeight;
+      }
+
+      if (timeline) timeline.addEventListener('click', (event) => {
+        const expandBtn = event.target && event.target.closest ? event.target.closest('.expandBtn') : null;
+        if (expandBtn) {
+          const row = expandBtn.closest('.event');
+          if (row) row.classList.toggle('compact');
+          return;
+        }
+        const actionBtn = event.target && event.target.closest ? event.target.closest('.actionBtn') : null;
+        if (actionBtn) {
+          const payload = detailStore.get(actionBtn.getAttribute('data-id'));
+          if (!payload) return;
+          modalName = payload.title || 'detail';
+          if (modalTitle) modalTitle.textContent = modalName;
+          renderModalContent(payload.content || '', payload.title || '');
+          if (detailModal) detailModal.classList.add('open');
+        }
+      });
+      if (runCenterCollapseBtn) runCenterCollapseBtn.addEventListener('click', () => {
+        if (runCenterSection) runCenterSection.classList.toggle('collapsed');
+        syncChevronState(runCenterCollapseBtn, runCenterSection && runCenterSection.classList.contains('collapsed'));
+        updateLayout();
+      });
+      if (timelineCollapseBtn) timelineCollapseBtn.addEventListener('click', () => {
+        if (timelineSection) timelineSection.classList.toggle('collapsed');
+        syncChevronState(timelineCollapseBtn, timelineSection && timelineSection.classList.contains('collapsed'));
+        updateLayout();
+      });
+      if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => detailModal && detailModal.classList.remove('open'));
+      if (modalCopyBtn) modalCopyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText(modalText || ''); } catch {} });
+      if (modalDownloadBtn) modalDownloadBtn.addEventListener('click', () => {
+        const ext = modalLang === 'json' ? 'json' : (modalLang === 'xml' ? 'xml' : 'txt');
+        const mime = modalLang === 'json' ? 'application/json;charset=utf-8' : (modalLang === 'xml' ? 'application/xml;charset=utf-8' : 'text/plain;charset=utf-8');
+        const blob = new Blob([modalText || ''], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = String(modalName || 'detail').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.' + ext;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+      if (runMeta) runMeta.addEventListener('click', async (event) => {
+        const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
+        if (copyBtn) { try { await navigator.clipboard.writeText(copyBtn.getAttribute('data-copy') || ''); } catch {} }
+      });
+      if (runMetaDock) runMetaDock.addEventListener('click', async (event) => {
+        const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
+        if (copyBtn) { try { await navigator.clipboard.writeText(copyBtn.getAttribute('data-copy') || ''); } catch {} return; }
+        const link = event.target && event.target.closest ? event.target.closest('[data-open-url]') : null;
+        if (link) { event.preventDefault(); vscodeApi.postMessage({ type: 'openExternal', url: link.getAttribute('data-open-url') || '' }); }
+      });
+      if (runMetaDockClose) runMetaDockClose.addEventListener('click', () => {
+        if (runMetaDockWrap) runMetaDockWrap.classList.add('collapsed');
+        if (runMetaDockLauncher) runMetaDockLauncher.classList.add('show');
+      });
+      if (runMetaDockLauncher) runMetaDockLauncher.addEventListener('click', () => {
+        if (runMetaDockWrap) {
+          runMetaDockWrap.classList.remove('collapsed');
+          runMetaDockWrap.classList.add('show');
+        }
         runMetaDockLauncher.classList.remove('show');
-      } else if (!runMetaDockWrap.classList.contains('collapsed')) {
-        runMetaDockLauncher.classList.remove('show');
-      }
+      });
+
+      window.addEventListener('message', (event) => {
+        const msg = event.data || {};
+        if (msg.type === 'init') {
+          const p = msg.payload || {};
+          meta.runName = p.runName || '-';
+          meta.orchestrationId = p.orchestrationId || '-';
+          meta.temporalLink = p.temporalLink || '-';
+          meta.outputPath = p.outputPath || 'pending (.flowtest-runs)';
+          meta.wiremockBaseUrl = p.wiremockBaseUrl || 'pending (engine will publish base URL)';
+          meta.allureResultsPath = '-';
+          meta.allureReportPath = '-';
+          renderMeta();
+          if (successCount) successCount.textContent = String(p.successCount ?? 0);
+          if (failureCount) failureCount.textContent = String(p.failureCount ?? 0);
+          if (intakeMode) intakeMode.textContent = String(p.intakeMode || '-');
+        } else if (msg.type === 'temporal') {
+          const p = msg.payload || {};
+          if (p.temporalLink) { meta.temporalLink = p.temporalLink; renderMeta(); }
+        } else if (msg.type === 'meta') {
+          const p = msg.payload || {};
+          if (p.outputPath) meta.outputPath = p.outputPath;
+          if (p.wiremockBaseUrl) meta.wiremockBaseUrl = p.wiremockBaseUrl;
+          if (p.allureResultsPath) meta.allureResultsPath = p.allureResultsPath;
+          if (p.allureReportPath) meta.allureReportPath = p.allureReportPath;
+          renderMeta();
+        } else if (msg.type === 'event') {
+          addEvent(msg.payload || {});
+        } else if (msg.type === 'summary') {
+          const p = msg.payload || {};
+          setSummary(p.status || '-', p.detail);
+        }
+      });
+
+      renderMeta();
+      syncChevronState(runCenterCollapseBtn, runCenterSection && runCenterSection.classList.contains('collapsed'));
+      syncChevronState(timelineCollapseBtn, timelineSection && timelineSection.classList.contains('collapsed'));
+      updateLayout();
+      addEvent({ time: new Date().toLocaleTimeString([], { hour12: false }), stage: 'UI', status: 'info', title: 'Webview Ready', detail: 'Timeline renderer initialized.' });
+      sendReadyOnce();
+    } catch (err) {
+      reportWebviewError('bootstrap.main', err);
+      sendReadyOnce();
     }
-    window.addEventListener('message', (event) => {
-      const msg = event.data || {};
-      if (msg.type === 'init') {
-        const p = msg.payload || {};
-        meta.runName = p.runName || '-'; meta.orchestrationId = p.orchestrationId || '-'; meta.temporalLink = p.temporalLink || '-';
-        meta.outputPath = p.outputPath || 'pending (.flowtest-runs)';
-        meta.wiremockBaseUrl = p.wiremockBaseUrl || 'pending (engine will publish base URL)';
-        meta.allureResultsPath = '-'; meta.allureReportPath = '-'; meta.allureGenerateCommand = '-';
-        renderMeta();
-        document.getElementById('successCount').textContent = String(p.successCount ?? 0);
-        document.getElementById('failureCount').textContent = String(p.failureCount ?? 0);
-        document.getElementById('intakeMode').textContent = String(p.intakeMode || '-');
-      }
-      if (msg.type === 'temporal') { const p = msg.payload || {}; if (p.temporalLink) { meta.temporalLink = p.temporalLink; renderMeta(); } }
-      if (msg.type === 'meta') {
-        const p = msg.payload || {};
-        if (p.outputPath) meta.outputPath = p.outputPath;
-        if (p.wiremockBaseUrl) meta.wiremockBaseUrl = p.wiremockBaseUrl;
-        if (p.allureResultsPath) meta.allureResultsPath = p.allureResultsPath;
-        if (p.allureReportPath) meta.allureReportPath = p.allureReportPath;
-        if (p.allureGenerateCommand) meta.allureGenerateCommand = p.allureGenerateCommand;
-        renderMeta();
-      }
-      if (msg.type === 'event') addEvent(msg.payload || {});
-      if (msg.type === 'summary') { const p = msg.payload || {}; setSummary(p.status || '-', p.detail); }
-    });
-    // Display-only chip; click behavior intentionally disabled.
-    renderMeta();
-    syncChevronState(runCenterCollapseBtn, runCenterSection.classList.contains('collapsed'));
-    syncChevronState(timelineCollapseBtn, timelineSection.classList.contains('collapsed'));
-    updateLayout();
-    addEvent({ time: new Date().toLocaleTimeString([], { hour12: false }), stage: 'UI', status: 'info', title: 'Webview Ready', detail: 'Timeline renderer initialized.' });
-    sendReadyOnce();
   </script>
 </body>
 </html>`;

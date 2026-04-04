@@ -27,6 +27,95 @@ export type FakeRunFixture = {
 };
 
 export function createFakeRunFixture(): FakeRunFixture {
+  const fakeApiRequest = {
+    taskType: "GENERATE_API_SPEC",
+    provider: "copilot",
+    model: "copilot-selected-model",
+    context: {
+      runName: "flowtest-fake-run",
+      orchestrationId: "fake-023c6646-1811-4d0c-aa17-9c118a87c2d7",
+      docTypes: ["success", "failure", "aid", "hld"]
+    },
+    request: {
+      requirements: {
+        validations: ["api", "db", "async", "vision"],
+        responseFormats: ["json", "xml"],
+        strictMode: true
+      },
+      samples: {
+        successCount: 3,
+        failureCount: 2
+      }
+    }
+  };
+  const fakeApiResponse = {
+    openapi: "3.0.3",
+    info: {
+      title: "FlowTest Fake Service",
+      version: "1.0.0"
+    },
+    paths: {
+      "/v1/eligibility/check": {
+        post: {
+          summary: "Eligibility check",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["customerId", "serviceType"],
+                  properties: {
+                    customerId: { type: "string" },
+                    serviceType: { type: "string" },
+                    metadata: { type: "object" }
+                  }
+                }
+              }
+            }
+          },
+          responses: {
+            "200": { description: "Eligible" },
+            "400": { description: "Invalid request" },
+            "503": { description: "Dependency timeout" }
+          }
+        }
+      }
+    }
+  };
+  const fakeDsl = {
+    dslVersion: "1.0",
+    scenarioId: "fake-electricity-disconnect",
+    name: "Fake end to end validation",
+    tags: ["ui", "api", "db", "async", "vision"],
+    config: {
+      timeoutMs: 120000,
+      retry: { maxAttempts: 2, backoffMs: 1500 }
+    },
+    steps: [
+      { type: "ui-open", page: "/start" },
+      { type: "ui-fill", field: "customerId", value: "CUST-1001" },
+      { type: "api-assert", endpoint: "/v1/eligibility/check", expectedStatus: 200 },
+      { type: "db-assert", query: "select status from orders where customer_id='CUST-1001'", expected: "PENDING" },
+      { type: "vision-assert", screenshot: "confirmation.png", checks: ["success message", "no error banner"] }
+    ]
+  };
+  const fakeEngineResult = {
+    success: true,
+    executedSteps: 5,
+    durationMs: 28439,
+    assertions: {
+      passed: 12,
+      failed: 0
+    },
+    artifacts: [
+      "api-spec.md",
+      "wiremock-mappings.json",
+      "scenario.dsl.json",
+      "engine-run-result.json"
+    ]
+  };
+
   return {
     runName: "flowtest-fake-run",
     orchestrationPrefix: "fake-",
@@ -52,7 +141,11 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "running",
         title: "Ai Request Dispatched",
         detail: "task=GENERATE_API_SPEC",
-        actions: [{ label: "AI Request", title: "Fake API Spec Prompt", content: "Generate normalized API spec from fake docs." }]
+        actions: [{
+          label: "AI Request",
+          title: "Fake API Spec Request",
+          content: JSON.stringify(fakeApiRequest)
+        }]
       },
       {
         time: "10:00:08",
@@ -60,7 +153,11 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Ai Response Received",
         detail: "17239 chars",
-        actions: [{ label: "AI Response", title: "Fake API Spec Response", content: "{ \"openapi\": \"3.0.3\", \"info\": { \"title\": \"Fake\" } }" }]
+        actions: [{
+          label: "AI Response",
+          title: "Fake API Spec Response",
+          content: JSON.stringify(fakeApiResponse)
+        }]
       },
       {
         time: "10:00:12",
@@ -76,7 +173,11 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Completed",
         detail: "Scenario generated and validated.",
-        actions: [{ label: "Generated DSL", title: "Fake Scenario DSL", content: "{ \"dslVersion\": \"1.0\", \"scenarioId\": \"fake\", \"steps\": [] }" }]
+        actions: [{
+          label: "Generated DSL",
+          title: "Fake Scenario DSL",
+          content: JSON.stringify(fakeDsl)
+        }]
       },
       {
         time: "10:00:20",
@@ -84,7 +185,11 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Completed",
         detail: "HTTP 200",
-        actions: [{ label: "Engine Output", title: "Fake Engine Result", content: "{ \"success\": true, \"steps\": [] }" }]
+        actions: [{
+          label: "Engine Output",
+          title: "Fake Engine Result",
+          content: JSON.stringify(fakeEngineResult)
+        }]
       },
       {
         time: "10:00:21",
@@ -97,4 +202,3 @@ export function createFakeRunFixture(): FakeRunFixture {
     ]
   };
 }
-
