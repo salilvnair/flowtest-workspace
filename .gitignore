@@ -1,5 +1,26 @@
-.history
-.vscode
 .DS_Store
-.idea
-**/.idea
+.history/
+.vscode/
+.idea/
+**/.idea/
+*.iml
+
+# Node / TypeScript
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Java / Maven
+**/target/
+*.class
+*.log
+
+# FlowTest generated artifacts
+flowtest-parent/allure-results/
+flowtest-parent/allure-report/
+
+# VS Code extension build output
+flowtest-copilot-extension/dist/
+*.vsix

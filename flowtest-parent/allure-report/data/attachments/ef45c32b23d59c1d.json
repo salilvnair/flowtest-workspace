@@ -1,8 +1,0 @@
-{
-  "assertionCount" : 0,
-  "requestUrl" : "/address/validate",
-  "timeoutMs" : 0,
-  "requestMethod" : "POST",
-  "action" : null,
-  "type" : "api-call"
-}
