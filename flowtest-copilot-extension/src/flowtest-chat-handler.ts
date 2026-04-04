@@ -164,7 +164,13 @@ function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> 
     const response = asObject(obj.response);
     if (!request || !response) return null;
     const method = String((request as any).method ?? "").trim();
-    const url = String((request as any).url ?? "").trim();
+    const url = String(
+      (request as any).url ??
+      (request as any).urlPath ??
+      (request as any).urlPattern ??
+      (request as any).urlPathPattern ??
+      ""
+    ).trim();
     if (!method || !url) return null;
     return { request, response };
   };
@@ -194,6 +200,38 @@ function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> 
     if (m) out.push(m);
   }
   return out;
+}
+
+function countScenarioMockCoverage(input: Record<string, unknown>): { mocks: number; inline: number } {
+  const countInlineInSteps = (steps: unknown): number => {
+    if (!Array.isArray(steps)) return 0;
+    let n = 0;
+    for (const step of steps) {
+      if (!step || typeof step !== "object") continue;
+      const req = (step as any).request;
+      if (req && typeof req === "object" && (req as any)._flowtestMockResponse !== undefined) {
+        n++;
+      }
+    }
+    return n;
+  };
+
+  if (Array.isArray((input as any).scenarios)) {
+    let mocks = 0;
+    let inline = 0;
+    for (const sc of (input as any).scenarios as Array<unknown>) {
+      if (!sc || typeof sc !== "object") continue;
+      const s = sc as Record<string, unknown>;
+      mocks += Array.isArray((s as any).mocks) ? (s as any).mocks.length : 0;
+      inline += countInlineInSteps((s as any).steps);
+    }
+    return { mocks, inline };
+  }
+
+  return {
+    mocks: Array.isArray((input as any).mocks) ? (input as any).mocks.length : 0,
+    inline: countInlineInSteps((input as any).steps)
+  };
 }
 
 function toSlug(raw: string): string {
@@ -1092,6 +1130,30 @@ async function handleStartCommand(
     pushVerbose("WIREMOCK", "mocks_attached_to_scenario", `attached=${inferredMocks.length}`);
   } else {
     pushVerbose("WIREMOCK", "mocks_parse_empty");
+  }
+
+  const coverage = countScenarioMockCoverage(scenarioObj);
+  pushVerbose("WIREMOCK", "coverage_check", `scenario_mocks=${coverage.mocks} inline_step_mocks=${coverage.inline}`);
+  if (coverage.mocks === 0 && coverage.inline === 0) {
+    const detail = "No mocks were extracted from WireMock output. Engine run skipped to avoid live API 404.";
+    pushVerbose(
+      "WIREMOCK",
+      "validation_error",
+      detail,
+      [{ label: "Generated Mocks", title: "WireMock - Generated", content: mocksOutput }]
+    );
+    statusPanel.setSummary({ status: "Failed", detail });
+    pushVerbose("RUN", "failed", "no_mocks_extracted");
+    stream.markdown([
+      "### WireMock Validation",
+      "",
+      "- **Status:** Failed",
+      "- **Reason:** No mocks could be parsed/attached to scenario.",
+      "- **Action:** Regenerate mocks or ensure WireMock output is valid JSON mappings."
+    ].join("\n"));
+    stream.markdown("\n### Verbose Event Hook\n\n" + verboseLines.join("\n"));
+    pushVerbose("UI", "verbose_section_rendered");
+    return resultWithFollowups(defaultFollowups());
   }
 
   const normalizedSet = normalizeScenariosForEngine(scenarioObj);

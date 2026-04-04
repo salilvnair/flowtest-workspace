@@ -632,7 +632,7 @@ export class FlowtestStatusPanel {
       font-size: 11px;
       color: color-mix(in srgb, var(--muted) 95%, transparent);
     }
-    .timerPill { margin-left: auto; border: 1px solid color-mix(in srgb, var(--info) 48%, var(--border)); border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; color: #9fd1ff; }
+    .timerPill { border: 1px solid color-mix(in srgb, var(--info) 48%, var(--border)); border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; color: #9fd1ff; flex-shrink: 0; white-space: nowrap; }
     .timerPill.hidden { display: none; }
     .timerPill.done { color: #9ef0b7; }
     .timerDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
