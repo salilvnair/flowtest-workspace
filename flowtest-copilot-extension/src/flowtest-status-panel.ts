@@ -459,7 +459,7 @@ export class FlowtestStatusPanel {
     }
     .section { border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--card) 88%, transparent); box-shadow: var(--shadow); overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
     .section.grow { flex: 1 1 auto; min-height: 0; }
-    .runSection { flex: 0 0 auto; }
+    .runSection { flex: 0 0 auto; overflow: hidden; }
     .runSection .sectionBody {
       max-height: 52vh;
       overflow: hidden;
@@ -638,12 +638,14 @@ export class FlowtestStatusPanel {
     .timerDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
     .timerPill { pointer-events: none; }
     .detail { color: color-mix(in srgb, var(--muted) 62%, transparent); margin-top: 4px; white-space: pre-wrap; word-break: break-word; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10px; letter-spacing: 0.15px; line-height: 1.45; }
-    .metaTable { margin-top: 6px; border-collapse: collapse; width: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10px; border-radius: 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
-    .metaTable th { text-align: left; padding: 3px 8px; color: color-mix(in srgb, var(--muted) 82%, var(--fg)); background: color-mix(in srgb, var(--card) 60%, transparent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--border); }
-    .metaTable td { padding: 3px 8px; color: var(--muted); border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent); word-break: break-all; }
+    .metaTable { margin-top: 8px; border-collapse: separate; border-spacing: 0; width: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10px; border-radius: 8px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 60%, transparent); box-shadow: 0 1px 4px rgba(0,0,0,0.18), 0 0 0 1px color-mix(in srgb, white 3%, transparent) inset; }
+    .metaTable th { text-align: left; padding: 5px 10px; color: color-mix(in srgb, var(--fg) 72%, var(--muted)); background: linear-gradient(180deg, color-mix(in srgb, var(--card) 80%, #1e2430), color-mix(in srgb, var(--bg) 90%, #161b24)); font-weight: 700; text-transform: uppercase; font-size: 9px; letter-spacing: 0.6px; border-bottom: 1px solid var(--border); }
+    .metaTable td { padding: 4px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent); }
+    .metaTable tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--card) 30%, transparent); }
+    .metaTable tbody tr:hover td { background: color-mix(in srgb, var(--info) 8%, transparent); }
     .metaTable tr:last-child td { border-bottom: none; }
-    .metaTable .metaKey { color: color-mix(in srgb, var(--info) 80%, var(--muted)); font-weight: 500; white-space: nowrap; }
-    .metaTable .metaVal { color: var(--fg); opacity: 0.78; }
+    .metaTable .metaKey { color: #79c0ff; font-weight: 600; white-space: nowrap; font-size: 10px; }
+    .metaTable .metaVal { color: color-mix(in srgb, var(--fg) 88%, var(--muted)); opacity: 0.88; font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace); font-size: 10px; }
     .actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
     .actionBtn { border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 84%, transparent); color: var(--fg); font-size: 10px; line-height: 1; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
     .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
@@ -660,15 +662,17 @@ export class FlowtestStatusPanel {
         radial-gradient(900px 340px at 50% -20%, color-mix(in srgb, var(--info) 14%, transparent), transparent 64%),
         rgba(0, 0, 0, 0.58);
       display: none;
-      align-items: center;
-      justify-content: center;
       padding: 18px;
       z-index: 99;
       backdrop-filter: blur(3px);
     }
-    .modal.open { display: flex; }
+    .modal.open { display: block; }
     .modalCard {
-      width: min(100%, 1020px);
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(calc(100% - 36px), 1020px);
       max-height: 84vh;
       border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
       border-radius: 12px;
@@ -678,6 +682,7 @@ export class FlowtestStatusPanel {
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      will-change: transform;
     }
     .modalHead {
       padding: 8px 10px;
@@ -687,7 +692,10 @@ export class FlowtestStatusPanel {
       justify-content: space-between;
       gap: 8px;
       background: linear-gradient(180deg, color-mix(in srgb, var(--card) 88%, transparent), color-mix(in srgb, var(--bg) 96%, transparent));
+      cursor: grab;
+      user-select: none;
     }
+    .modalHead:active { cursor: grabbing; }
     .modalTitle { font-weight: 800; font-size: 12px; }
     .modalActions { display: inline-flex; align-items: center; gap: 6px; }
     .closeBtn { border: 1px solid var(--border); border-radius: 8px; background: color-mix(in srgb, var(--card) 86%, transparent); color: var(--fg); font-size: 11px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; width: max-content; }
@@ -1077,9 +1085,65 @@ export class FlowtestStatusPanel {
         const rc = runCenterSection && runCenterSection.classList.contains('collapsed');
         const tl = timelineSection && timelineSection.classList.contains('collapsed');
         if (sectionDivider) sectionDivider.style.display = (!rc && !tl) ? 'block' : 'none';
+        /* Reset inline styles from divider drag when collapsing/expanding */
+        if (runCenterSection) {
+          runCenterSection.style.flex = rc ? '0 0 auto' : '';
+          runCenterSection.style.overflow = '';
+          var rcBody = runCenterSection.querySelector('.sectionBody');
+          if (rcBody) rcBody.style.maxHeight = '';
+        }
+        if (timelineSection) {
+          timelineSection.style.flex = tl ? '0 0 auto' : '';
+        }
         if (rc && !tl && timelineSection) timelineSection.style.flex = '1 1 auto';
-        if (tl && !rc && runCenterSection) runCenterSection.style.flex = '0 0 auto';
       }
+
+      /* --- Section Divider Drag --- */
+      (function() {
+        if (!sectionDivider || !runCenterSection || !timelineSection) return;
+        var divDrag = null;
+        var minTimeH = 120;
+        sectionDivider.addEventListener('mousedown', function(e) {
+          var panelStack = runCenterSection.parentElement;
+          if (!panelStack) return;
+          var stackH = panelStack.clientHeight - sectionDivider.offsetHeight;
+          var rcH = runCenterSection.offsetHeight;
+          /* Compute min = sectionHead height so header always visible */
+          var rcHead = runCenterSection.querySelector('.sectionHead');
+          var minRunH = rcHead ? rcHead.offsetHeight + 2 : 42;
+          /* Compute max = natural content height (scrollHeight with maxHeight removed temporarily) */
+          var rcBody = runCenterSection.querySelector('.sectionBody');
+          var origMax = rcBody ? rcBody.style.maxHeight : '';
+          var origFlex = runCenterSection.style.flex;
+          if (rcBody) rcBody.style.maxHeight = 'none';
+          runCenterSection.style.flex = '0 0 auto';
+          var naturalRunH = runCenterSection.scrollHeight;
+          runCenterSection.style.flex = origFlex || '';
+          if (rcBody) rcBody.style.maxHeight = origMax || '';
+          divDrag = { startY: e.clientY, startRunH: rcH, stackH: stackH, minRunH: minRunH, naturalRunH: naturalRunH };
+          sectionDivider.classList.add('dragging');
+          e.preventDefault();
+        });
+        document.addEventListener('mousemove', function(e) {
+          if (!divDrag) return;
+          var delta = e.clientY - divDrag.startY;
+          var newRunH = divDrag.startRunH + delta;
+          var maxRunH = Math.min(divDrag.naturalRunH, divDrag.stackH - minTimeH);
+          if (newRunH < divDrag.minRunH) newRunH = divDrag.minRunH;
+          if (newRunH > maxRunH) newRunH = maxRunH;
+          var newTimeH = divDrag.stackH - newRunH;
+          runCenterSection.style.flex = '0 0 ' + newRunH + 'px';
+          runCenterSection.style.overflow = 'hidden';
+          var rcBody = runCenterSection.querySelector('.sectionBody');
+          if (rcBody) rcBody.style.maxHeight = 'none';
+          timelineSection.style.flex = '0 0 ' + newTimeH + 'px';
+        });
+        document.addEventListener('mouseup', function() {
+          if (!divDrag) return;
+          divDrag = null;
+          sectionDivider.classList.remove('dragging');
+        });
+      })();
       function metaCopyButton(copyValue) {
         if (!copyValue || copyValue === '-') return '';
         return '<button class="metaCopyBtn" type="button" data-copy="' + esc(copyValue) + '" title="Copy">'
@@ -1589,7 +1653,33 @@ export class FlowtestStatusPanel {
         syncChevronState(timelineCollapseBtn, timelineSection && timelineSection.classList.contains('collapsed'));
         updateLayout();
       });
-      if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => detailModal && detailModal.classList.remove('open'));
+      if (modalCloseBtn) modalCloseBtn.addEventListener('click', () => { if (detailModal) { detailModal.classList.remove('open'); var mc = detailModal.querySelector('.modalCard'); if (mc) { mc.style.left = '50%'; mc.style.top = '50%'; mc.style.transform = 'translate(-50%, -50%)'; } } });
+      /* Modal drag */
+      (function() {
+        var modalHead = detailModal ? detailModal.querySelector('.modalHead') : null;
+        var modalCard = detailModal ? detailModal.querySelector('.modalCard') : null;
+        if (!modalHead || !modalCard) return;
+        var drag = null;
+        modalHead.addEventListener('mousedown', function(e) {
+          if (e.target && e.target.closest && e.target.closest('button')) return;
+          var rect = modalCard.getBoundingClientRect();
+          drag = { startX: e.clientX, startY: e.clientY, origLeft: rect.left, origTop: rect.top };
+          modalCard.style.transform = 'none';
+          modalCard.style.left = rect.left + 'px';
+          modalCard.style.top = rect.top + 'px';
+          e.preventDefault();
+        });
+        document.addEventListener('mousemove', function(e) {
+          if (!drag) return;
+          var newLeft = drag.origLeft + (e.clientX - drag.startX);
+          var newTop = drag.origTop + (e.clientY - drag.startY);
+          modalCard.style.left = newLeft + 'px';
+          modalCard.style.top = newTop + 'px';
+        });
+        document.addEventListener('mouseup', function() {
+          drag = null;
+        });
+      })();
       if (modalCopyBtn) modalCopyBtn.addEventListener('click', async () => { try { await navigator.clipboard.writeText(modalText || ''); } catch {} });
       if (modalDownloadBtn) modalDownloadBtn.addEventListener('click', () => {
         const ext = modalLang === 'json' ? 'json' : (modalLang === 'xml' ? 'xml' : 'txt');
@@ -1616,6 +1706,37 @@ export class FlowtestStatusPanel {
         if (runMetaDockWrap) runMetaDockWrap.classList.add('collapsed');
         if (runMetaDockLauncher) runMetaDockLauncher.classList.add('show');
       });
+      /* Execution Result dock drag */
+      (function() {
+        var dockHead = runMetaDock ? runMetaDock.querySelector('.runMetaDockHead') : null;
+        if (!dockHead || !runMetaDockWrap) return;
+        var dockDrag = null;
+        var dockOffsetX = 0;
+        var dockOffsetY = 0;
+        dockHead.addEventListener('mousedown', function(e) {
+          if (e.target && e.target.closest && e.target.closest('button')) return;
+          dockDrag = { startX: e.clientX, startY: e.clientY, baseX: dockOffsetX, baseY: dockOffsetY };
+          runMetaDockWrap.classList.add('dragging');
+          e.preventDefault();
+        });
+        document.addEventListener('mousemove', function(e) {
+          if (!dockDrag) return;
+          var nextX = dockDrag.baseX + (e.clientX - dockDrag.startX);
+          var nextY = dockDrag.baseY + (e.clientY - dockDrag.startY);
+          var maxX = window.innerWidth / 2 - 40;
+          var maxY = window.innerHeight - 80;
+          var clampX = Math.max(-maxX, Math.min(maxX, nextX));
+          var clampY = Math.max(-maxY, Math.min(40, nextY));
+          dockOffsetX = clampX;
+          dockOffsetY = clampY;
+          runMetaDockWrap.style.transform = 'translate(' + dockOffsetX + 'px, ' + dockOffsetY + 'px)';
+        });
+        document.addEventListener('mouseup', function() {
+          if (!dockDrag) return;
+          dockDrag = null;
+          runMetaDockWrap.classList.remove('dragging');
+        });
+      })();
       if (runMetaDockLauncher) runMetaDockLauncher.addEventListener('click', () => {
         if (runMetaDockWrap) {
           runMetaDockWrap.classList.remove('collapsed');

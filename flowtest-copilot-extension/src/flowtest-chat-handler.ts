@@ -1326,7 +1326,7 @@ export function chatRequestHandler(opts: { extensionUri: vscode.Uri }): vscode.C
           });
 
           if (!choice) {
-            notifyCancelled("FlowTest form cancelled.");
+            notifyCancelled("FlowTest Forms Bootstrap cancelled.");
             return resultWithFollowups(defaultFollowups());
           }
 
@@ -1345,7 +1345,9 @@ export function chatRequestHandler(opts: { extensionUri: vscode.Uri }): vscode.C
       ) {
         const normalizedRequest = await openSpecificForm(norm(text), opts.extensionUri);
         if (!normalizedRequest) {
-          notifyCancelled("FlowTest form cancelled.");
+          const formNames = { open_scenario_form: 'Scenario Builder', open_mocks_form: 'Mocks Planner', open_vision_form: 'Vision Assertions' };
+          const label = formNames[norm(text) as keyof typeof formNames] || norm(text);
+          notifyCancelled(`FlowTest ${label} form cancelled.`);
           return resultWithFollowups(defaultFollowups());
         }
         return generateFromNormalizedRequest(normalizedRequest, stream, token);
