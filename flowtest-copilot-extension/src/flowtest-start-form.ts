@@ -158,7 +158,7 @@ function getHtml(n: string): string {
     .pill {
       border: 1px solid var(--border);
       border-radius: 999px;
-      padding: 4px 10px;
+      padding: 5px 12px;
       font-size: 10px;
       font-weight: 800;
       color: #b9dcff;
@@ -225,11 +225,12 @@ function getHtml(n: string): string {
     .badge {
       border: 1px solid var(--border);
       border-radius: 999px;
-      min-width: 52px;
+      min-width: 70px;
       text-align: center;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 900;
-      padding: 2px 8px;
+      padding: 3px 10px;
+      letter-spacing: 0.25px;
     }
     .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
     .badge.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }

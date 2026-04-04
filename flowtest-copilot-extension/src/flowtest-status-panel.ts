@@ -450,11 +450,15 @@ export class FlowtestStatusPanel {
       max-height: 52vh;
       overflow: hidden;
       transition: max-height 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease;
+      justify-content: flex-start;
     }
     .runSection.grow .sectionBody { max-height: none; }
     .runSection .hero {
-      flex: 1 1 auto;
-      min-height: 0;
+      flex: 0 0 auto;
+      min-height: auto;
+      height: auto;
+      overflow: visible;
+      padding-bottom: 6px;
     }
     .timelineSection { flex: 1 1 auto; min-height: 280px; }
     .timelineSection.collapsed { min-height: 0; flex: 0 0 auto; }
@@ -789,6 +793,19 @@ export class FlowtestStatusPanel {
     function applyDockTransform() {
       runMetaDockWrap.style.transform = 'translate(' + dockOffsetX + 'px, ' + dockOffsetY + 'px)';
     }
+    function getRunCenterNaturalHeight() {
+      const head = runCenterSection.querySelector('.sectionHead');
+      const body = runCenterSection.querySelector('.sectionBody');
+      if (!head || !body) {
+        return Math.round(runCenterSection.getBoundingClientRect().height);
+      }
+      const sectionStyles = getComputedStyle(runCenterSection);
+      const borderTop = parseFloat(sectionStyles.borderTopWidth || '0') || 0;
+      const borderBottom = parseFloat(sectionStyles.borderBottomWidth || '0') || 0;
+      const headHeight = head.getBoundingClientRect().height;
+      const bodyNatural = body.scrollHeight;
+      return Math.ceil(headHeight + bodyNatural + borderTop + borderBottom);
+    }
     function esc(s) {
       return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
@@ -932,8 +949,7 @@ export class FlowtestStatusPanel {
       }
       if (tl && !rc) {
         timelineSection.style.flex = '0 0 auto';
-        runCenterSection.style.flex = '1 1 auto';
-        runCenterSection.classList.add('grow');
+        runCenterSection.style.flex = '0 0 auto';
         return;
       }
       if (!rc && !tl) {
@@ -941,8 +957,8 @@ export class FlowtestStatusPanel {
           runCenterSection.style.flex = '0 0 ' + Math.round(manualRunHeight) + 'px';
           timelineSection.style.flex = '1 1 auto';
         } else {
-          runCenterSection.style.flex = '';
-          timelineSection.style.flex = '';
+          runCenterSection.style.flex = '0 0 auto';
+          timelineSection.style.flex = '1 1 auto';
         }
         timelineSection.classList.add('grow');
       }
@@ -951,7 +967,12 @@ export class FlowtestStatusPanel {
       if (runCenterSection.classList.contains('collapsed') || timelineSection.classList.contains('collapsed')) return;
       const runRect = runCenterSection.getBoundingClientRect();
       const stackRect = panelStack.getBoundingClientRect();
-      dividerDrag = { startY: e.clientY, startRun: runRect.height, stackH: stackRect.height };
+      dividerDrag = {
+        startY: e.clientY,
+        startRun: runRect.height,
+        stackH: stackRect.height,
+        naturalRun: getRunCenterNaturalHeight()
+      };
       sectionDivider.classList.add('dragging');
       e.preventDefault();
     });
@@ -971,8 +992,10 @@ export class FlowtestStatusPanel {
       const minTop = 180;
       const minBottom = 220;
       const maxTop = Math.max(minTop, dividerDrag.stackH - minBottom - sectionDivider.offsetHeight);
-      const nextTop = Math.max(minTop, Math.min(maxTop, dividerDrag.startRun + delta));
-      runCenterSection.style.flex = '0 0 ' + Math.round(nextTop) + 'px';
+      const desiredTop = Math.max(minTop, Math.min(maxTop, dividerDrag.startRun + delta));
+      const naturalTop = Math.max(minTop, Math.round(dividerDrag.naturalRun || getRunCenterNaturalHeight()));
+      const nextTop = Math.min(desiredTop, naturalTop);
+      runCenterSection.style.flex = '0 0 ' + nextTop + 'px';
       timelineSection.style.flex = '1 1 auto';
     });
     window.addEventListener('mouseup', () => {

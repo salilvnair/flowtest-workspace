@@ -205,7 +205,7 @@ function getHtml(n: string): string {
     .pill {
       border: 1px solid var(--border);
       border-radius: 999px;
-      padding: 4px 10px;
+      padding: 5px 12px;
       font-size: 10px;
       font-weight: 800;
       color: #b9dcff;
@@ -249,11 +249,12 @@ function getHtml(n: string): string {
     .badge {
       border: 1px solid var(--border);
       border-radius: 999px;
-      min-width: 56px;
+      min-width: 70px;
       text-align: center;
-      font-size: 9px;
+      font-size: 10px;
       font-weight: 900;
-      padding: 2px 8px;
+      padding: 3px 10px;
+      letter-spacing: 0.25px;
     }
     .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
     .badge.info { color: var(--info); background: color-mix(in srgb, var(--info) 13%, transparent); }
@@ -262,14 +263,34 @@ function getHtml(n: string): string {
     .field > label { font-size: 11px; color: color-mix(in srgb, var(--fg) 78%, var(--muted)); }
     input, select, textarea {
       width: 100%;
-      min-height: 30px;
-      padding: 7px 9px;
+      min-height: 34px;
+      padding: 8px 10px;
       font-size: 12px;
       color: var(--vscode-input-foreground);
       background: var(--vscode-input-background);
       border: 1px solid var(--vscode-input-border);
       border-radius: 8px;
       transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    select {
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      padding-right: 34px;
+      background-image:
+        linear-gradient(45deg, transparent 50%, color-mix(in srgb, var(--fg) 72%, transparent) 50%),
+        linear-gradient(135deg, color-mix(in srgb, var(--fg) 72%, transparent) 50%, transparent 50%);
+      background-position:
+        calc(100% - 16px) calc(50% - 2px),
+        calc(100% - 11px) calc(50% - 2px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      border-color: color-mix(in srgb, var(--vscode-input-border) 86%, var(--border));
+      box-shadow: 0 1px 0 color-mix(in srgb, white 8%, transparent) inset;
+    }
+    select:hover {
+      border-color: color-mix(in srgb, var(--focus) 36%, var(--vscode-input-border));
+      background-color: color-mix(in srgb, var(--hover) 40%, var(--vscode-input-background));
     }
     textarea { min-height: 90px; resize: vertical; }
     input:focus, select:focus, textarea:focus {
