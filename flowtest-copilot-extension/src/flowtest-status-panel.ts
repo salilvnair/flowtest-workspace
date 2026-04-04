@@ -705,13 +705,13 @@ export class FlowtestStatusPanel {
     .modalBody {
       margin: 0;
       padding: 0;
-      overflow: auto;
+      overflow: hidden;
       white-space: normal;
       word-break: normal;
       font-family: var(--vscode-editor-font-family, monospace);
       font-size: 12px;
       color: var(--fg);
-      background: #11161d;
+      background: #0d1117;
       flex: 1 1 auto;
       min-height: 0;
       display: flex;
@@ -778,10 +778,10 @@ export class FlowtestStatusPanel {
       padding: 2px 0;
     }
     /* --- view panels --- */
-    .viewPanel { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .viewPanel { display: none; flex: 1 1 auto; min-height: 0; overflow: hidden; background: #0d1117; }
     .viewPanel.active { display: flex; flex-direction: column; }
     /* --- Pretty view with line numbers --- */
-    .prettyWrap { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .prettyWrap { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; max-width: 100%; background: #0d1117; }
     .lineNums {
       flex: 0 0 auto;
       padding: 12px 0;
@@ -792,8 +792,9 @@ export class FlowtestStatusPanel {
       font-size: 12px;
       line-height: 1.5;
       border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-      background: #0c1018;
+      background: #0d1117;
       min-width: 36px;
+      align-self: stretch;
     }
     .lineNums span { display: block; padding: 0 8px 0 10px; }
     .codeLang {
@@ -812,11 +813,10 @@ export class FlowtestStatusPanel {
     }
     .codeFrame {
       margin: 0;
-      width: max-content;
-      min-width: 100%;
+      width: 100%;
       border-radius: 0;
       border: none;
-      overflow: auto;
+      overflow: hidden;
       background: #0d1117;
       flex: 1 1 auto;
     }
@@ -826,24 +826,29 @@ export class FlowtestStatusPanel {
       font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
       font-size: 12px;
       line-height: 1.5;
-      white-space: pre;
+      white-space: pre-wrap;
+      word-break: break-word;
       color: #d4dee9;
       tab-size: 2;
+      min-height: 100%;
+      background: #0d1117;
     }
-    .tok-key { color: #79c0ff; }
-    .tok-str { color: #a5d6ff; }
-    .tok-num { color: #f2cc8f; }
-    .tok-bool { color: #c3a6ff; }
+    .tok-key { color: #79c0ff; font-weight: 700; }
+    .tok-str { color: #7ee787; }
+    .tok-num { color: #f2cc8f; font-weight: 600; }
+    .tok-bool { color: #d2a8ff; font-weight: 600; }
     .tok-null { color: #8b949e; font-style: italic; }
-    .tok-punc { color: #9aa4b0; }
+    .tok-punc { color: #8b949e; }
     mark.searchHit { background: #e2c08d44; color: inherit; border-radius: 2px; outline: 1px solid #e2c08d88; }
     /* --- Raw view --- */
-    .rawView { padding: 12px; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #d4dee9; background: #0d1117; flex: 1; overflow: auto; }
+    .rawView { padding: 12px; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #d4dee9; background: #0d1117; flex: 1; overflow: auto; min-height: 100%; }
     /* --- Tree view (Postman-style) --- */
     .treeView { padding: 8px 0; overflow: auto; flex: 1; background: #0d1117; }
     .treeNode { font-size: 12px; line-height: 1.6; font-family: var(--vscode-editor-font-family, monospace); }
     .treeRow { display: flex; align-items: flex-start; padding: 1px 0 1px 0; cursor: default; }
     .treeRow:hover { background: color-mix(in srgb, #79c0ff 8%, transparent); }
+    .treeRow mark.searchHit { background: #e2c08d44; color: inherit; border-radius: 2px; outline: 1px solid #e2c08d88; }
+    .treeRow.searchMatch { background: color-mix(in srgb, #e2c08d 10%, transparent); }
     .treeToggle {
       flex: 0 0 16px;
       width: 16px;
@@ -1106,7 +1111,7 @@ export class FlowtestStatusPanel {
       }
       function detectLang(content, hint) {
         const h = String(hint || '').toLowerCase().trim();
-        if (h) return h;
+        if (h === 'json' || h === 'xml' || h === 'text') return h;
         const t = String(content || '').trim();
         if (t.startsWith('{') || t.startsWith('[')) return 'json';
         if (t.startsWith('<')) return 'xml';
@@ -1159,37 +1164,73 @@ export class FlowtestStatusPanel {
         highlightSearch(q);
       });
 
-      function highlightSearch(query) {
-        if (!vpPretty) return;
-        var code = vpPretty.querySelector('code');
-        if (!code) return;
+      function highlightInContainer(container, query) {
+        if (!container) return 0;
         // Remove old highlights
-        code.querySelectorAll('mark.searchHit').forEach(function(m) {
+        container.querySelectorAll('mark.searchHit').forEach(function(m) {
           var parent = m.parentNode;
           if (parent) { parent.replaceChild(document.createTextNode(m.textContent || ''), m); parent.normalize(); }
         });
-        if (!query) return;
-        var walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT, null);
+        if (!query) return 0;
+        var walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
         var hits = [];
         var node;
         while ((node = walker.nextNode())) {
           var text = node.textContent || '';
           var lower = text.toLowerCase();
           var qLower = query.toLowerCase();
-          var idx = lower.indexOf(qLower);
-          if (idx !== -1) hits.push({ node: node, idx: idx, len: query.length });
+          var startIdx = 0;
+          var idx;
+          while ((idx = lower.indexOf(qLower, startIdx)) !== -1) {
+            hits.push({ node: node, idx: idx, len: query.length });
+            startIdx = idx + qLower.length;
+          }
         }
         for (var i = hits.length - 1; i >= 0; i--) {
           var h = hits[i];
-          var range = document.createRange();
-          range.setStart(h.node, h.idx);
-          range.setEnd(h.node, h.idx + h.len);
-          var mark = document.createElement('mark');
-          mark.className = 'searchHit';
-          range.surroundContents(mark);
+          try {
+            var range = document.createRange();
+            range.setStart(h.node, h.idx);
+            range.setEnd(h.node, h.idx + h.len);
+            var mark = document.createElement('mark');
+            mark.className = 'searchHit';
+            range.surroundContents(mark);
+          } catch(e) {}
         }
-        var first = code.querySelector('mark.searchHit');
-        if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return hits.length;
+      }
+
+      function highlightSearch(query) {
+        // Pretty tab
+        var code = vpPretty ? vpPretty.querySelector('code') : null;
+        highlightInContainer(code, query);
+        if (code) {
+          var first = code.querySelector('mark.searchHit');
+          if (first && activeView === 'pretty') first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+        // Tree tab
+        if (treeContent) {
+          // Clear old row highlights
+          treeContent.querySelectorAll('.treeRow.searchMatch').forEach(function(r) { r.classList.remove('searchMatch'); });
+          highlightInContainer(treeContent, query);
+          // Highlight matching rows and expand parents
+          if (query) {
+            treeContent.querySelectorAll('mark.searchHit').forEach(function(m) {
+              var row = m.closest('.treeRow');
+              if (row) row.classList.add('searchMatch');
+              // Expand collapsed parent nodes
+              var parent = m.closest('.treeChildren.hidden');
+              while (parent) {
+                parent.classList.remove('hidden');
+                var prevToggle = parent.previousElementSibling ? parent.previousElementSibling.querySelector('.treeToggle') : null;
+                if (prevToggle) prevToggle.classList.remove('collapsed');
+                parent = parent.parentElement ? parent.parentElement.closest('.treeChildren.hidden') : null;
+              }
+            });
+            var firstTree = treeContent.querySelector('mark.searchHit');
+            if (firstTree && activeView === 'tree') firstTree.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }
+        }
       }
 
       /* --- Tree builder (Postman style) --- */
@@ -1300,7 +1341,8 @@ export class FlowtestStatusPanel {
           wrap.appendChild(children);
 
           // Toggle collapse
-          toggle.addEventListener('click', function() {
+          toggle.addEventListener('click', function(ev) {
+            ev.stopPropagation();
             var isHidden = children.classList.contains('hidden');
             children.classList.toggle('hidden');
             toggle.classList.toggle('collapsed', !isHidden);
@@ -1318,8 +1360,19 @@ export class FlowtestStatusPanel {
 
           // Row click also toggles
           row.addEventListener('click', function(e) {
-            if (e.target === copyBtn) return;
-            toggle.click();
+            if (e.target === copyBtn || e.target.closest('.treeCopyBtn')) return;
+            var wasHidden = children.classList.contains('hidden');
+            children.classList.toggle('hidden');
+            toggle.classList.toggle('collapsed', wasHidden === false);
+            var typeEl = valEl.querySelector('.treeType');
+            if (typeEl) {
+              if (!wasHidden) {
+                var closing = isArr ? ']' : '}';
+                typeEl.textContent = (isArr ? value.length + ' item' + (value.length !== 1 ? 's' : '') : Object.keys(value).length + ' key' + (Object.keys(value).length !== 1 ? 's' : '')) + ' \u2026 ' + closing;
+              } else {
+                typeEl.textContent = isArr ? value.length + ' item' + (value.length !== 1 ? 's' : '') : Object.keys(value).length + ' key' + (Object.keys(value).length !== 1 ? 's' : '');
+              }
+            }
           });
           row.style.cursor = 'pointer';
         }
@@ -1336,6 +1389,7 @@ export class FlowtestStatusPanel {
         }
         treeContent.appendChild(buildTreeNode(null, parsed, 0));
       }
+      var NL = String.fromCharCode(10);
       function jsonIndent(level) { return '  '.repeat(Math.max(0, level)); }
       function jsonToHtml(value, level) {
         if (value === null) return '<span class="tok-null">null</span>';
@@ -1343,27 +1397,27 @@ export class FlowtestStatusPanel {
         if (typeof value === 'number') return '<span class="tok-num">' + esc(String(value)) + '</span>';
         if (typeof value === 'boolean') return '<span class="tok-bool">' + esc(String(value)) + '</span>';
         if (Array.isArray(value)) {
-          if (value.length === 0) return '<span class="tok-punc">[</span><span class="tok-punc">]</span>';
-          var out = '<span class="tok-punc">[</span>\\n';
+          if (value.length === 0) return '<span class="tok-punc">[]</span>';
+          var out = '<span class="tok-punc">[</span>' + NL;
           for (var i = 0; i < value.length; i++) {
             out += jsonIndent(level + 1) + jsonToHtml(value[i], level + 1);
             if (i < value.length - 1) out += '<span class="tok-punc">,</span>';
-            out += '\\n';
+            out += NL;
           }
           return out + jsonIndent(level) + '<span class="tok-punc">]</span>';
         }
         if (typeof value === 'object') {
           var entries = Object.entries(value);
-          if (entries.length === 0) return '<span class="tok-punc">{</span><span class="tok-punc">}</span>';
-          var out2 = '<span class="tok-punc">{</span>\\n';
+          if (entries.length === 0) return '<span class="tok-punc">{}</span>';
+          var out2 = '<span class="tok-punc">{</span>' + NL;
           for (var j = 0; j < entries.length; j++) {
             var pair = entries[j];
             out2 += jsonIndent(level + 1)
               + '<span class="tok-key">' + esc(JSON.stringify(pair[0])) + '</span>'
-              + '<span class="tok-punc">: </span>'
+              + '<span class="tok-punc">:</span> '
               + jsonToHtml(pair[1], level + 1);
             if (j < entries.length - 1) out2 += '<span class="tok-punc">,</span>';
-            out2 += '\\n';
+            out2 += NL;
           }
           return out2 + jsonIndent(level) + '<span class="tok-punc">}</span>';
         }
