@@ -30,6 +30,10 @@ function resultWithFollowups(followups: FlowtestFollowup[]): vscode.ChatResult {
   return { metadata: { flowtest_followups: followups } };
 }
 
+function notifyCancelled(message = "FlowTest form cancelled."): void {
+  void vscode.window.showInformationMessage(message);
+}
+
 function defaultFollowups(): FlowtestFollowup[] {
   return [
     { prompt: "start", label: "Start intake" },
@@ -561,7 +565,7 @@ async function handleStartCommand(
   });
 
   if (!intake) {
-    stream.markdown("Cancelled.");
+    notifyCancelled("FlowTest intake cancelled.");
     return resultWithFollowups(defaultFollowups());
   }
 
@@ -1322,7 +1326,7 @@ export function chatRequestHandler(opts: { extensionUri: vscode.Uri }): vscode.C
           });
 
           if (!choice) {
-            stream.markdown("Cancelled.");
+            notifyCancelled("FlowTest form cancelled.");
             return resultWithFollowups(defaultFollowups());
           }
 
@@ -1341,7 +1345,7 @@ export function chatRequestHandler(opts: { extensionUri: vscode.Uri }): vscode.C
       ) {
         const normalizedRequest = await openSpecificForm(norm(text), opts.extensionUri);
         if (!normalizedRequest) {
-          stream.markdown("Cancelled.");
+          notifyCancelled("FlowTest form cancelled.");
           return resultWithFollowups(defaultFollowups());
         }
         return generateFromNormalizedRequest(normalizedRequest, stream, token);

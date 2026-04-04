@@ -263,11 +263,199 @@ export class FlowtestStatusPanel {
     .tile.ok .v { color: var(--ok); }
     .tile.bad .v { color: var(--err); }
     .tile.mode .v { color: var(--info); text-transform: capitalize; }
+    .runFooterDock {
+      flex: 0 0 auto;
+      padding: 8px 12px 10px;
+      border-top: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--card) 72%, transparent), color-mix(in srgb, var(--bg) 96%, transparent));
+      box-shadow: 0 -6px 16px rgba(0,0,0,0.14) inset;
+      display: grid;
+      gap: 8px;
+    }
+    .runFooterDock .stats { margin-top: 0; }
+    .runMetaDockWrap {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: 12px;
+      z-index: 14;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .runMetaDockWrap.show { display: flex; }
+    .runMetaDock {
+      border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+      border-radius: 11px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--card) 90%, #1f252d);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.24);
+      min-width: min(760px, calc(100vw - 32px));
+      transition: opacity 280ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1), max-width 320ms ease;
+      transform-origin: center bottom;
+      pointer-events: none;
+    }
+    .runMetaDockWrap.show .runMetaDock { pointer-events: auto; }
+    .runMetaDockWrap.collapsed .runMetaDock {
+      opacity: 0;
+      transform: translateY(12px) scale(0.96);
+      pointer-events: none;
+    }
+    .runMetaDockHead {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+      cursor: grab;
+      user-select: none;
+    }
+    .runMetaDockWrap.dragging .runMetaDockHead { cursor: grabbing; }
+    .runMetaDockTitle {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.32px;
+      color: #b8c7e8;
+      font-weight: 800;
+    }
+    .runMetaDockClose {
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 999px;
+      min-width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, #182338 84%, transparent);
+      color: #b9d8ff;
+      cursor: pointer;
+      transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 140ms ease;
+    }
+    .runMetaDockClose:hover {
+      border-color: color-mix(in srgb, var(--focus) 45%, var(--border));
+      background: color-mix(in srgb, var(--focus) 22%, #182338);
+      color: #d7ebff;
+    }
+    .runMetaDockClose:active { transform: scale(0.96); }
+    .runMetaDockClose svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .runMetaDockLauncher {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      position: fixed;
+      right: 16px;
+      bottom: 12px;
+      z-index: 15;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      background: linear-gradient(145deg, color-mix(in srgb, #9fd1ff 38%, #1a253c), color-mix(in srgb, #111929 92%, black));
+      color: #9fd1ff;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(0) scale(0.86);
+      transition: opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease;
+    }
+    .runMetaDockLauncher.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateX(0) scale(1);
+    }
+    .runMetaDockLauncher:hover { border-color: color-mix(in srgb, var(--focus) 45%, var(--border)); }
+    .runMetaDockLauncher svg {
+      width: 14px;
+      height: 14px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .runMetaDockGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 7px;
+    }
+    .runMetaDockItem {
+      border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      border-radius: 9px;
+      padding: 6px 7px;
+      background: color-mix(in srgb, var(--card) 86%, #242a33);
+      min-width: 0;
+    }
+    .runMetaDockKey {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.32px;
+      color: #aebddc;
+      margin-bottom: 2px;
+      font-weight: 800;
+    }
+    .runMetaDockKey svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.92;
+      flex: 0 0 auto;
+    }
+    .runMetaDockVal {
+      font-size: 11px;
+      color: #e3ecff;
+      word-break: break-word;
+      line-height: 1.35;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+    .runMetaDockValText {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .runMetaDockVal a {
+      color: #9fd1ff;
+      text-decoration: none;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .runMetaDockVal a:hover { text-decoration: underline; }
+    @media (max-width: 860px) {
+      .runFooterDock .stats { grid-template-columns: 1fr; }
+      .runMetaDockGrid { grid-template-columns: 1fr; }
+      .runMetaDock { min-width: 0; width: 100%; }
+    }
     .section { border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--card) 88%, transparent); box-shadow: var(--shadow); overflow: hidden; min-height: 0; display: flex; flex-direction: column; }
     .section.grow { flex: 1 1 auto; min-height: 0; }
     .runSection { flex: 0 0 auto; }
-    .runSection .sectionBody { max-height: 52vh; overflow: hidden; }
+    .runSection .sectionBody {
+      max-height: 52vh;
+      overflow: hidden;
+      transition: max-height 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease;
+    }
     .runSection.grow .sectionBody { max-height: none; }
+    .runSection .hero {
+      flex: 1 1 auto;
+      min-height: 0;
+    }
     .timelineSection { flex: 1 1 auto; min-height: 280px; }
     .timelineSection.collapsed { min-height: 0; flex: 0 0 auto; }
     .resizeDivider {
@@ -284,22 +472,96 @@ export class FlowtestStatusPanel {
       background: linear-gradient(to bottom, transparent 35%, color-mix(in srgb, var(--info) 78%, transparent) 35%, color-mix(in srgb, var(--info) 78%, transparent) 65%, transparent 65%);
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--info) 50%, transparent) inset;
     }
-    .sectionBody { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-    .section.collapsed .sectionBody { max-height: 0; opacity: 0; }
+    .sectionBody {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: max-height 340ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease, transform 300ms ease;
+      transform-origin: top center;
+    }
+    .section.collapsed .sectionBody {
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+    }
     .sectionHead { padding: 9px 10px; border-bottom: 1px solid var(--border); font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; font-weight: 900; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .sectionHeadLeft, .sectionHeadRight { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .collapseBtn, .expandBtn { border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 84%, transparent); color: var(--muted); font-size: 11px; font-weight: 900; cursor: pointer; }
-    .collapseBtn { min-width: 22px; height: 20px; padding: 0 6px; display: inline-flex; align-items: center; justify-content: center; }
-    .expandBtn { padding: 1px 7px; }
-    .collapseBtn svg, .expandBtn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 180ms ease; }
+    .collapseBtn, .expandBtn {
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 999px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, transparent), color-mix(in srgb, var(--bg) 96%, transparent));
+      color: color-mix(in srgb, var(--fg) 70%, var(--muted));
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 1px 0 color-mix(in srgb, white 10%, transparent) inset, 0 2px 6px rgba(0,0,0,0.14);
+      transition: border-color 220ms ease, background 220ms ease, color 220ms ease, transform 180ms ease, box-shadow 220ms ease;
+    }
+    .collapseBtn {
+      min-width: 24px;
+      height: 24px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .expandBtn {
+      padding: 2px 7px;
+      min-width: 24px;
+      height: 22px;
+    }
+    .collapseBtn:hover, .expandBtn:hover {
+      color: color-mix(in srgb, var(--fg) 92%, transparent);
+      border-color: color-mix(in srgb, var(--focus) 45%, var(--border));
+      background: linear-gradient(180deg, color-mix(in srgb, var(--focus) 12%, var(--card)), color-mix(in srgb, var(--bg) 94%, transparent));
+      box-shadow: 0 1px 0 color-mix(in srgb, white 14%, transparent) inset, 0 3px 10px rgba(0,0,0,0.2);
+    }
+    .collapseBtn:active, .expandBtn:active {
+      transform: scale(0.96);
+    }
+    .collapseBtn svg, .expandBtn svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: transform 340ms cubic-bezier(0.22, 1, 0.36, 1);
+      transform-origin: 50% 50%;
+    }
     .collapseBtn.is-collapsed svg, .expandBtn.is-collapsed svg { transform: rotate(180deg); }
     .followToggle { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 10px; color: var(--muted); background: color-mix(in srgb, var(--card) 82%, transparent); text-transform: none; letter-spacing: 0; font-weight: 700; }
     .followToggle input { accent-color: var(--info); width: 12px; height: 12px; }
-    .testBtn { border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 10px; font-weight: 700; color: #9fd1ff; background: color-mix(in srgb, #9fd1ff 14%, transparent); cursor: pointer; }
+    .testBtn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #9fd1ff;
+      background: color-mix(in srgb, #9fd1ff 14%, transparent);
+      cursor: default;
+      pointer-events: none;
+      user-select: none;
+      opacity: 0.92;
+    }
     .timeline { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
     .event { border: 1px solid var(--border); border-radius: 10px; padding: 8px; background: color-mix(in srgb, var(--card) 84%, transparent); display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: flex-start; }
-    .eventBody { max-height: 340px; overflow: hidden; }
-    .event.compact .eventBody { max-height: 0; opacity: 0; }
+    .eventBody {
+      max-height: 340px;
+      overflow: hidden;
+      transition: max-height 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease, transform 260ms ease;
+      transform-origin: top center;
+    }
+    .event.compact .eventBody {
+      max-height: 0;
+      opacity: 0;
+      transform: translateY(-3px);
+    }
     .statusPill, .controlChip, .stageTag { border: 1px solid var(--border); border-radius: 999px; font-size: 10px; line-height: 1; padding: 2px 7px; }
     .stageTag { color: var(--info); background: color-mix(in srgb, var(--info) 14%, transparent); }
     .stageTag.ui { color: #7ed8ff; background: color-mix(in srgb, #7ed8ff 22%, transparent); }
@@ -322,10 +584,41 @@ export class FlowtestStatusPanel {
     .time { font-family: var(--vscode-editor-font-family, monospace); color: var(--muted); font-size: 11px; }
     .titleWrap { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; }
     .title { font-weight: 700; }
+    .titleWrap .expandBtn {
+      position: relative;
+      z-index: 2;
+      pointer-events: auto;
+      flex: 0 0 auto;
+    }
+    .event.lowSignal .title {
+      font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace);
+      font-size: 11px;
+      font-weight: 500;
+      color: color-mix(in srgb, var(--muted) 92%, var(--fg));
+      letter-spacing: 0.1px;
+    }
+    .event.lowSignal .time {
+      font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace);
+      font-size: 10px;
+      color: color-mix(in srgb, var(--muted) 88%, transparent);
+    }
+    .event.lowSignal .dot {
+      width: 7px;
+      height: 7px;
+      margin-top: 6px;
+      background: color-mix(in srgb, var(--muted) 70%, var(--info));
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--muted) 16%, transparent);
+    }
+    .event.lowSignal .detail {
+      font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace);
+      font-size: 11px;
+      color: color-mix(in srgb, var(--muted) 95%, transparent);
+    }
     .timerPill { margin-left: auto; border: 1px solid color-mix(in srgb, var(--info) 48%, var(--border)); border-radius: 999px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; color: #9fd1ff; }
     .timerPill.hidden { display: none; }
     .timerPill.done { color: #9ef0b7; }
     .timerDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .timerPill { pointer-events: none; }
     .detail { color: var(--muted); margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
     .actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
     .actionBtn { border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 84%, transparent); color: var(--fg); font-size: 10px; line-height: 1; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
@@ -377,6 +670,8 @@ export class FlowtestStatusPanel {
         <div class="hero">
           <h1>FlowTest Run Center</h1>
           <div class="metaRich" id="runMeta"></div>
+        </div>
+        <div class="runFooterDock">
           <div class="stats">
             <div class="tile ok"><div class="k">Success Samples</div><div class="v" id="successCount">0</div></div>
             <div class="tile bad"><div class="k">Failure Samples</div><div class="v" id="failureCount">0</div></div>
@@ -390,7 +685,7 @@ export class FlowtestStatusPanel {
       <div class="sectionHead">
         <div class="sectionHeadLeft">Live Timeline <button id="timelineCollapseBtn" class="collapseBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
         <div class="sectionHeadRight">
-          <button id="fakeTimelineBtn" class="testBtn" type="button">Fake timeline</button>
+          <span id="fakeTimelineBtn" class="testBtn">Fake timeline</span>
           <label class="followToggle"><input id="followLogs" type="checkbox" checked /> Follow logs</label>
         </div>
       </div>
@@ -400,6 +695,20 @@ export class FlowtestStatusPanel {
       </div>
     </div>
   </div>
+  <div class="runMetaDockWrap" id="runMetaDockWrap">
+    <div class="runMetaDock" id="runMetaDock">
+      <div class="runMetaDockHead">
+        <span class="runMetaDockTitle">Execution Result</span>
+        <button class="runMetaDockClose" id="runMetaDockClose" type="button" title="Hide execution result">
+          <svg viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div class="runMetaDockGrid" id="runMetaDockGrid"></div>
+    </div>
+  </div>
+  <button class="runMetaDockLauncher" id="runMetaDockLauncher" type="button" title="Show execution result">
+    <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0 -12 0v3l-2 3h16l-2-3z"></path><path d="M10 18a2 2 0 0 0 4 0"></path></svg>
+  </button>
   <div class="modal" id="detailModal">
     <div class="modalCard">
       <div class="modalHead">
@@ -452,6 +761,13 @@ export class FlowtestStatusPanel {
     const followLogs = document.getElementById('followLogs');
     const fakeTimelineBtn = document.getElementById('fakeTimelineBtn');
     const runState = document.getElementById('runState');
+    const runMetaWrap = document.getElementById('runMeta');
+    const runMetaDockWrap = document.getElementById('runMetaDockWrap');
+    const runMetaDock = document.getElementById('runMetaDock');
+    const runMetaDockGrid = document.getElementById('runMetaDockGrid');
+    const runMetaDockLauncher = document.getElementById('runMetaDockLauncher');
+    const runMetaDockHead = document.querySelector('.runMetaDockHead');
+    const runMetaDockClose = document.getElementById('runMetaDockClose');
     const summary = document.getElementById('summary');
     const detailModal = document.getElementById('detailModal');
     const modalTitle = document.getElementById('modalTitle');
@@ -466,7 +782,13 @@ export class FlowtestStatusPanel {
     let modalName = 'detail';
     let dividerDrag = null;
     let manualRunHeight = null;
+    let dockDrag = null;
+    let dockOffsetX = 0;
+    let dockOffsetY = 0;
     const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-', allureGenerateCommand: '-' };
+    function applyDockTransform() {
+      runMetaDockWrap.style.transform = 'translate(' + dockOffsetX + 'px, ' + dockOffsetY + 'px)';
+    }
     function esc(s) {
       return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
@@ -486,25 +808,40 @@ export class FlowtestStatusPanel {
     function metaHtml() {
       const run = asMetaText(meta.runName);
       const orchestration = asMetaText(meta.orchestrationId);
-      const temporal = asMetaText(meta.temporalLink);
-      const outputPath = asMetaText(meta.outputPath);
-      const wiremockUrl = asMetaText(meta.wiremockBaseUrl);
-      const allureResults = asMetaText(meta.allureResultsPath);
-      const allureReport = asMetaText(meta.allureReportPath);
-      const allureCommand = asMetaText(meta.allureGenerateCommand);
-      const temporalView = temporal !== '-'
-        ? '<a class="metaValueLink" href="' + esc(temporal) + '" data-open-url="' + esc(temporal) + '">' + esc(temporal) + '</a>'
-        : '-';
       return '<div class="metaChip"><span class="mk">Run</span><span class="mv"><span class="metaValueText">' + esc(run) + '</span>' + metaCopyButton(run) + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Orchestration</span><span class="mv"><span class="metaValueText">' + esc(orchestration) + '</span>' + metaCopyButton(orchestration) + '</span></div>' +
-        '<div class="metaChip"><span class="mk">Temporal</span><span class="mv"><span class="metaValueText">' + temporalView + '</span></span></div>' +
-        '<div class="metaChip"><span class="mk">Output Path</span><span class="mv"><span class="metaValueText">' + esc(outputPath) + '</span></span></div>' +
-        '<div class="metaChip"><span class="mk">WireMock Base URL</span><span class="mv"><span class="metaValueText">' + esc(wiremockUrl) + '</span></span></div>' +
-        '<div class="metaChip"><span class="mk">Allure Results</span><span class="mv"><span class="metaValueText">' + esc(allureResults) + '</span></span></div>' +
-        '<div class="metaChip"><span class="mk">Allure Report</span><span class="mv"><span class="metaValueText">' + esc(allureReport) + '</span></span></div>' +
-        '<div class="metaChip"><span class="mk">Allure Command</span><span class="mv"><span class="metaValueText">' + esc(allureCommand) + '</span></span></div>';
+        '<div class="metaChip"><span class="mk">Orchestration</span><span class="mv"><span class="metaValueText">' + esc(orchestration) + '</span>' + metaCopyButton(orchestration) + '</span></div>';
     }
-    function renderMeta() { document.getElementById('runMeta').innerHTML = metaHtml(); }
+    function renderMetaDock() {
+      const temporal = String(meta.temporalLink || '-');
+      const outputPath = String(meta.outputPath || '-');
+      const wiremock = String(meta.wiremockBaseUrl || '-');
+      const allureResults = String(meta.allureResultsPath || '-');
+      const allureReport = String(meta.allureReportPath || '-');
+      const temporalView = temporal && temporal !== '-'
+        ? '<a href="#" data-open-url="' + esc(temporal) + '">' + esc(temporal) + '</a>'
+        : '<span class="runMetaDockValText">-</span>';
+      const outputView = '<span class="runMetaDockValText">' + esc(outputPath) + '</span>';
+      const wiremockView = '<span class="runMetaDockValText">' + esc(wiremock) + '</span>';
+      const allureResultsView = '<span class="runMetaDockValText">' + esc(allureResults) + '</span>';
+      const allureReportView = '<span class="runMetaDockValText">' + esc(allureReport) + '</span>';
+      const keyIcon = {
+        temporal: '<svg viewBox="0 0 24 24"><path d="M3 12h18"></path><path d="M12 3v18"></path><circle cx="12" cy="12" r="8"></circle></svg>',
+        output: '<svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h10"></path><path d="M4 17h16"></path></svg>',
+        wiremock: '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2"></circle><circle cx="18" cy="6" r="2"></circle><circle cx="18" cy="18" r="2"></circle><path d="M8 12h8"></path><path d="M16.6 7.4l-5.2 3.2"></path><path d="M11.4 13.4l5.2 3.2"></path></svg>',
+        allureResults: '<svg viewBox="0 0 24 24"><path d="M4 20h16"></path><path d="M7 16v-5"></path><path d="M12 16V8"></path><path d="M17 16v-3"></path></svg>',
+        allureReport: '<svg viewBox="0 0 24 24"><path d="M6 3h9l5 5v13H6z"></path><path d="M15 3v5h5"></path><path d="M9 13h6"></path><path d="M9 17h6"></path></svg>'
+      };
+      runMetaDockGrid.innerHTML =
+        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.temporal + 'Temporal</div><div class="runMetaDockVal">' + temporalView + metaCopyButton(temporal) + '</div></div>' +
+        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.output + 'Output Path</div><div class="runMetaDockVal">' + outputView + metaCopyButton(outputPath) + '</div></div>' +
+        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.wiremock + 'WireMock Base URL</div><div class="runMetaDockVal">' + wiremockView + metaCopyButton(wiremock) + '</div></div>' +
+        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.allureResults + 'Allure Results</div><div class="runMetaDockVal">' + allureResultsView + metaCopyButton(allureResults) + '</div></div>' +
+        '<div class="runMetaDockItem"><div class="runMetaDockKey">' + keyIcon.allureReport + 'Allure Report</div><div class="runMetaDockVal">' + allureReportView + metaCopyButton(allureReport) + '</div></div>';
+    }
+    function renderMeta() {
+      document.getElementById('runMeta').innerHTML = metaHtml();
+      renderMetaDock();
+    }
     function syncChevronState(btn, isCollapsed) {
       if (!btn) return;
       btn.classList.toggle('is-collapsed', Boolean(isCollapsed));
@@ -527,6 +864,54 @@ export class FlowtestStatusPanel {
         const url = link.getAttribute('data-open-url') || '';
         vscodeApi.postMessage({ type: 'openExternal', url });
       }
+    });
+    runMetaDock.addEventListener('click', (event) => {
+      const copyBtn = event.target && event.target.closest ? event.target.closest('.metaCopyBtn') : null;
+      if (copyBtn) {
+        event.preventDefault();
+        const copyValue = copyBtn.getAttribute('data-copy') || '';
+        navigator.clipboard.writeText(copyValue).catch(() => {});
+        copyBtn.classList.remove('copied');
+        void copyBtn.offsetWidth;
+        copyBtn.classList.add('copied');
+        setTimeout(() => copyBtn.classList.remove('copied'), 850);
+        return;
+      }
+      const link = event.target && event.target.closest ? event.target.closest('[data-open-url]') : null;
+      if (!link) return;
+      event.preventDefault();
+      const url = link.getAttribute('data-open-url') || '';
+      vscodeApi.postMessage({ type: 'openExternal', url });
+    });
+    runMetaDockClose.addEventListener('mousedown', (event) => {
+      event.stopPropagation();
+    });
+    runMetaDockClose.addEventListener('click', (event) => {
+      event.stopPropagation();
+      runMetaDockWrap.classList.add('collapsed');
+      runMetaDockLauncher.classList.add('show');
+    });
+    runMetaDockLauncher.addEventListener('click', () => {
+      runMetaDockWrap.classList.remove('collapsed');
+      runMetaDockWrap.classList.add('show');
+      runMetaDockLauncher.classList.remove('show');
+    });
+    runMetaDockHead.addEventListener('mousedown', (event) => {
+      if (!runMetaDockWrap.classList.contains('show') || runMetaDockWrap.classList.contains('collapsed')) return;
+      dockDrag = { startX: event.clientX, startY: event.clientY, baseX: dockOffsetX, baseY: dockOffsetY };
+      runMetaDockWrap.classList.add('dragging');
+      event.preventDefault();
+    });
+    timeline.addEventListener('click', (event) => {
+      const btn = event.target && event.target.closest ? event.target.closest('.expandBtn') : null;
+      if (!btn) return;
+      const row = btn.closest('.event');
+      if (!row) return;
+      row.classList.toggle('compact');
+      syncChevronState(btn, row.classList.contains('compact'));
+      btn.setAttribute('title', row.classList.contains('compact') ? 'Expand' : 'Collapse');
+      event.preventDefault();
+      event.stopPropagation();
     });
     function updateLayout() {
       const rc = runCenterSection.classList.contains('collapsed');
@@ -571,6 +956,16 @@ export class FlowtestStatusPanel {
       e.preventDefault();
     });
     window.addEventListener('mousemove', (e) => {
+      if (dockDrag) {
+        const nextX = dockDrag.baseX + (e.clientX - dockDrag.startX);
+        const nextY = dockDrag.baseY + (e.clientY - dockDrag.startY);
+        const margin = 36;
+        const clampX = Math.max(-(window.innerWidth - margin), Math.min(window.innerWidth - margin, nextX));
+        const clampY = Math.max(-(window.innerHeight - margin), Math.min(window.innerHeight - margin, nextY));
+        dockOffsetX = clampX;
+        dockOffsetY = clampY;
+        applyDockTransform();
+      }
       if (!dividerDrag) return;
       const delta = e.clientY - dividerDrag.startY;
       const minTop = 180;
@@ -581,6 +976,10 @@ export class FlowtestStatusPanel {
       timelineSection.style.flex = '1 1 auto';
     });
     window.addEventListener('mouseup', () => {
+      if (dockDrag) {
+        dockDrag = null;
+        runMetaDockWrap.classList.remove('dragging');
+      }
       if (!dividerDrag) return;
       const m = /^0 0 ([0-9]+)px$/.exec(String(runCenterSection.style.flex || ''));
       manualRunHeight = m ? Number(m[1]) : manualRunHeight;
@@ -649,6 +1048,23 @@ export class FlowtestStatusPanel {
       if (s === 'engine run') return { cls: 'java', text: 'Java' };
       return { cls: 'vscode', text: 'VS Code Copilot' };
     }
+    function isLowSignalEvent(ev) {
+      const stage = String(ev && ev.stage || '').toLowerCase().trim();
+      const title = String(ev && ev.title || '').toLowerCase().trim();
+      if (
+        title === 'webview ready' ||
+        title === 'started' ||
+        title === 'status panel initialized' ||
+        title === 'ai response received' ||
+        title === 'ai request received' ||
+        title === 'ai request dispatched' ||
+        title.includes('ai request') ||
+        title.includes('ai response') ||
+        title === 'completed'
+      ) return true;
+      if (stage === 'ui' && (title.includes('ready') || title.includes('initialized') || title.includes('started'))) return true;
+      return false;
+    }
     function startTimer(stage, node){
       const k = stageKey(stage);
       const old = aiTimers.get(k); if (old && old.id) clearInterval(old.id);
@@ -672,6 +1088,7 @@ export class FlowtestStatusPanel {
     function addEvent(ev){
       const row = document.createElement('div');
       row.className = 'event compact';
+      if (isLowSignalEvent(ev)) row.classList.add('lowSignal');
       const sm = statusMeta(ev.status);
       const cm = controlForStage(ev.stage);
       const sc = stageCls(ev.stage);
@@ -704,10 +1121,6 @@ export class FlowtestStatusPanel {
         syncChevronState(rowExpandBtn, isCompact);
         rowExpandBtn.setAttribute('title', isCompact ? 'Expand' : 'Collapse');
       };
-      rowExpandBtn.addEventListener('click', () => {
-        row.classList.toggle('compact');
-        syncRowExpandState();
-      });
       syncRowExpandState();
       row.querySelectorAll('.actionBtn').forEach((b) => b.addEventListener('click', () => {
         const p = detailStore.get(b.getAttribute('data-id')); if (!p) return;
@@ -729,6 +1142,14 @@ export class FlowtestStatusPanel {
       const s = String(status || '').toLowerCase();
       if (s.includes('fail')) runState.classList.add('stateFail');
       if (s.includes('complete') || s.includes('success')) runState.classList.add('stateComplete');
+      const isDone = s.includes('complete') || s.includes('success');
+      runMetaDockWrap.classList.toggle('show', isDone);
+      if (!isDone) {
+        runMetaDockWrap.classList.remove('collapsed');
+        runMetaDockLauncher.classList.remove('show');
+      } else if (!runMetaDockWrap.classList.contains('collapsed')) {
+        runMetaDockLauncher.classList.remove('show');
+      }
     }
     window.addEventListener('message', (event) => {
       const msg = event.data || {};
@@ -756,19 +1177,7 @@ export class FlowtestStatusPanel {
       if (msg.type === 'event') addEvent(msg.payload || {});
       if (msg.type === 'summary') { const p = msg.payload || {}; setSummary(p.status || '-', p.detail); }
     });
-    fakeTimelineBtn.addEventListener('click', async () => {
-      const now = new Date();
-      const mk = (s) => new Date(now.getTime() + s * 1000).toLocaleTimeString([], { hour12: false });
-      const rows = [
-        { time: mk(0), stage: 'Intake', status: 'running', title: 'Normalized', detail: 'Local fake event for UI verification' },
-        { time: mk(1), stage: 'API Spec', status: 'running', title: 'Ai Request Dispatched', detail: 'Testing timer + row rendering' },
-        { time: mk(3), stage: 'API Spec', status: 'success', title: 'Ai Response Received', detail: 'Timer should persist on row' },
-        { time: mk(4), stage: 'Engine Run', status: 'success', title: 'Completed', detail: 'Timeline and collapse verified' }
-      ];
-      setSummary('Running', 'Injecting fake timeline events...');
-      for (const r of rows) { addEvent(r); await new Promise((res) => setTimeout(res, 220)); }
-      setSummary('Completed', 'Fake timeline run completed.');
-    });
+    // Display-only chip; click behavior intentionally disabled.
     renderMeta();
     syncChevronState(runCenterCollapseBtn, runCenterSection.classList.contains('collapsed'));
     syncChevronState(timelineCollapseBtn, timelineSection.classList.contains('collapsed'));

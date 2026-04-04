@@ -150,6 +150,19 @@ function getHtml(n: string): string {
       --shadow: 0 10px 24px rgba(0,0,0,0.18);
     }
     * { box-sizing: border-box; }
+    @keyframes ftFadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes ftShine {
+      0% { transform: translateX(-120%); opacity: 0; }
+      30% { opacity: 0.42; }
+      100% { transform: translateX(140%); opacity: 0; }
+    }
+    @keyframes ftPulseGlow {
+      0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--focus) 0%, transparent); }
+      50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 28%, transparent); }
+    }
     body {
       margin: 0;
       padding: 14px;
@@ -163,7 +176,12 @@ function getHtml(n: string): string {
       line-height: 1.35;
     }
     .wrap { max-width: 980px; margin: 0 auto; padding-bottom: 70px; }
+    .hero, .card, .toggleRow { animation: ftFadeInUp 260ms ease both; }
+    .card { animation-delay: 30ms; }
+    #advancedCard { animation-delay: 55ms; }
     .hero {
+      position: relative;
+      overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 12px;
       background: linear-gradient(160deg, color-mix(in srgb, var(--card) 90%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
@@ -171,8 +189,18 @@ function getHtml(n: string): string {
       box-shadow: var(--shadow);
       margin-bottom: 10px;
     }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(104deg, transparent 22%, color-mix(in srgb, var(--info) 26%, transparent) 46%, transparent 73%);
+      transform: translateX(-130%);
+      animation: ftShine 7s ease-in-out infinite;
+      pointer-events: none;
+    }
     .heroHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .hero h1 { margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.2px; }
+    .hero h1 { margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.2px; display: inline-flex; align-items: center; gap: 8px; }
+    .hero h1 svg { width: 16px; height: 16px; stroke: #9fd1ff; fill: none; stroke-width: 2; }
     .hint { color: var(--muted); margin-top: 4px; }
     .pill {
       border: 1px solid var(--border);
@@ -180,17 +208,32 @@ function getHtml(n: string): string {
       padding: 4px 10px;
       font-size: 10px;
       font-weight: 800;
-      color: var(--muted);
-      background: color-mix(in srgb, var(--card) 82%, transparent);
+      color: #b9dcff;
+      background: linear-gradient(140deg, color-mix(in srgb, var(--info) 28%, transparent), color-mix(in srgb, var(--card) 84%, transparent));
       white-space: nowrap;
     }
     .card {
+      position: relative;
+      overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 12px;
       background: linear-gradient(160deg, color-mix(in srgb, var(--card) 88%, transparent), color-mix(in srgb, var(--bg) 95%, transparent));
       padding: 10px;
       margin-top: 9px;
       box-shadow: var(--shadow);
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+    .card:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 40%, var(--border));
+      box-shadow: 0 12px 28px rgba(0,0,0,0.24);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, color-mix(in srgb, white 9%, transparent), transparent 38%);
+      pointer-events: none;
     }
     .title {
       font-size: 11px;
@@ -237,6 +280,7 @@ function getHtml(n: string): string {
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .checks { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
     .check {
+      position: relative;
       border: 1px solid var(--border);
       border-radius: 10px;
       padding: 8px;
@@ -245,8 +289,53 @@ function getHtml(n: string): string {
       align-items: center;
       gap: 8px;
       font-size: 12px;
+      cursor: pointer;
+      transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
     }
-    .check input { width: 14px; height: 14px; accent-color: var(--info); }
+    .check:hover {
+      border-color: color-mix(in srgb, var(--info) 45%, var(--border));
+      background: color-mix(in srgb, var(--hover) 68%, var(--card));
+    }
+    .check input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .checkMark {
+      width: 18px;
+      height: 18px;
+      border: 1px solid color-mix(in srgb, var(--border) 90%, transparent);
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--bg) 82%, transparent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      transition: all 140ms ease;
+    }
+    .checkMark svg {
+      width: 12px;
+      height: 12px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0;
+      transform: scale(0.5);
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+    .checkText { color: var(--fg); }
+    .check input:checked + .checkMark {
+      background: color-mix(in srgb, var(--info) 84%, #2f82ff);
+      border-color: color-mix(in srgb, var(--info) 72%, var(--border));
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--info) 45%, transparent) inset;
+      animation: ftPulseGlow 1.4s ease-out 1;
+    }
+    .check input:checked + .checkMark svg {
+      opacity: 1;
+      transform: scale(1);
+    }
     .toggleRow {
       display: flex;
       align-items: center;
@@ -287,16 +376,41 @@ function getHtml(n: string): string {
       z-index: 4;
     }
     button {
+      position: relative;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       padding: 7px 12px;
       min-height: 32px;
       border-radius: 8px;
       border: 1px solid var(--vscode-button-border, transparent);
       cursor: pointer;
       font-size: 12px;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
     }
-    button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+    button:hover { transform: translateY(-1px); }
+    button svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    button.primary {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--vscode-button-background) 86%, white 14%), var(--vscode-button-background));
+      color: var(--vscode-button-foreground);
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--vscode-button-background) 35%, transparent);
+    }
+    button.primary::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(102deg, transparent 20%, rgba(255,255,255,0.26) 50%, transparent 80%);
+      transform: translateX(-130%);
+      transition: transform 350ms ease;
+    }
+    button.primary:hover::after { transform: translateX(120%); }
     button.primary:hover { background: var(--vscode-button-hoverBackground); }
-    button.secondary { background: transparent; color: var(--fg); border-color: var(--border); }
+    button.secondary {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--card) 84%, transparent), color-mix(in srgb, var(--bg) 94%, transparent));
+      color: var(--fg);
+      border-color: var(--border);
+    }
     @media (max-width: 860px) {
       .grid2, .checks { grid-template-columns: 1fr; }
       .actions { position: static; margin-top: 10px; justify-content: flex-end; }
@@ -306,7 +420,7 @@ function getHtml(n: string): string {
 <body><div class="wrap">
   <div class="hero">
     <div class="heroHead">
-      <h1>FlowTest Scenario Builder</h1>
+      <h1><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"></path><circle cx="18" cy="18" r="2"></circle></svg>FlowTest Scenario Builder</h1>
       <span class="pill">Guided Mode</span>
     </div>
     <div class="hint">Capture flow intent in Basic mode. Turn on Advanced for dependency failure and vision planning.</div>
@@ -324,10 +438,10 @@ function getHtml(n: string): string {
     </div>
     <div class="title" style="margin-top:10px"><span class="badge info">Basic</span>Validation Scope</div>
     <div class="checks">
-      <label class="check"><input id="includeApi" type="checkbox" checked /> API assertions</label>
-      <label class="check"><input id="includeDb" type="checkbox" checked /> DB truth checks</label>
-      <label class="check"><input id="includeAsync" type="checkbox" checked /> Async/workflow wait checks</label>
-      <label class="check"><input id="includeVision" type="checkbox" /> Vision assertions</label>
+      <label class="check"><input id="includeApi" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">API assertions</span></label>
+      <label class="check"><input id="includeDb" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">DB truth checks</span></label>
+      <label class="check"><input id="includeAsync" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Async/workflow wait checks</span></label>
+      <label class="check"><input id="includeVision" type="checkbox" /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Vision assertions</span></label>
     </div>
     <div class="field" style="margin-top:10px"><label>Additional Notes</label><textarea id="notes" placeholder="Any constraints, contracts, edge cases..."></textarea></div>
   </div>
@@ -354,9 +468,9 @@ function getHtml(n: string): string {
       <div class="field"><label>Success Status</label><input id="dependencySuccessCode" value="200" /></div>
     </div>
     <div class="checks" style="margin-top:8px">
-      <label class="check"><input id="includeTimeout" type="checkbox" checked /> Timeout scenario</label>
-      <label class="check"><input id="includeRetryableFailure" type="checkbox" checked /> Retryable failure</label>
-      <label class="check"><input id="includePartialFailure" type="checkbox" /> Partial failure</label>
+      <label class="check"><input id="includeTimeout" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Timeout scenario</span></label>
+      <label class="check"><input id="includeRetryableFailure" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Retryable failure</span></label>
+      <label class="check"><input id="includePartialFailure" type="checkbox" /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Partial failure</span></label>
     </div>
 
     <div class="title" style="margin-top:10px"><span class="badge warn">Advanced</span>Vision Planning</div>
@@ -364,14 +478,17 @@ function getHtml(n: string): string {
       <div class="field" style="grid-column: 1 / -1;"><label>Expected Screen Intent</label><input id="expectedScreen" value="Order confirmation screen shown after submit" /></div>
     </div>
     <div class="checks" style="margin-top:8px">
-      <label class="check"><input id="checkSuccessMessage" type="checkbox" checked /> Success message visible</label>
-      <label class="check"><input id="checkReferenceId" type="checkbox" checked /> Reference/order id visible</label>
-      <label class="check"><input id="checkNoErrorBanner" type="checkbox" checked /> No error banner visible</label>
+      <label class="check"><input id="checkSuccessMessage" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Success message visible</span></label>
+      <label class="check"><input id="checkReferenceId" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">Reference/order id visible</span></label>
+      <label class="check"><input id="checkNoErrorBanner" type="checkbox" checked /><span class="checkMark"><svg viewBox="0 0 16 16"><path d="M3.2 8.4l3 3.2l6.6-7.1"></path></svg></span><span class="checkText">No error banner visible</span></label>
     </div>
     <div class="field" style="margin-top:8px"><label>Extra Checks (one per line)</label><textarea id="extraChecks" placeholder="spinner hidden&#10;submit button disabled"></textarea></div>
   </div>
 
-  <div class="actions"><button class="secondary" id="cancelBtn">Cancel</button><button class="primary" id="generateBtn">Generate FlowTest Request</button></div>
+  <div class="actions">
+    <button class="secondary" id="cancelBtn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>Cancel</button>
+    <button class="primary" id="generateBtn"><svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M13 5l7 7l-7 7"></path></svg>Generate FlowTest Request</button>
+  </div>
 </div>
 <script nonce="${n}">
   const vscode = acquireVsCodeApi();

@@ -108,6 +108,15 @@ function getHtml(n: string): string {
       --shadow: 0 10px 24px rgba(0,0,0,0.18);
     }
     * { box-sizing: border-box; }
+    @keyframes ftFadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes ftShine {
+      0% { transform: translateX(-120%); opacity: 0; }
+      30% { opacity: 0.42; }
+      100% { transform: translateX(140%); opacity: 0; }
+    }
     body {
       margin: 0;
       padding: 14px;
@@ -121,7 +130,11 @@ function getHtml(n: string): string {
       line-height: 1.35;
     }
     .wrap { max-width: 980px; margin: 0 auto; padding-bottom: 72px; }
+    .hero, .card, .actions { animation: ftFadeInUp 260ms ease both; }
+    .card { animation-delay: 30ms; }
     .hero {
+      position: relative;
+      overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 12px;
       background: linear-gradient(160deg, color-mix(in srgb, var(--card) 90%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
@@ -129,8 +142,18 @@ function getHtml(n: string): string {
       box-shadow: var(--shadow);
       margin-bottom: 10px;
     }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(104deg, transparent 22%, color-mix(in srgb, var(--info) 26%, transparent) 46%, transparent 73%);
+      transform: translateX(-130%);
+      animation: ftShine 7s ease-in-out infinite;
+      pointer-events: none;
+    }
     .heroHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .hero h1 { margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.2px; }
+    .hero h1 { margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.2px; display: inline-flex; align-items: center; gap: 8px; }
+    .hero h1 svg { width: 16px; height: 16px; stroke: #9fd1ff; fill: none; stroke-width: 2; }
     .hint { color: var(--muted); margin-top: 4px; }
     .pill {
       border: 1px solid var(--border);
@@ -138,8 +161,8 @@ function getHtml(n: string): string {
       padding: 4px 10px;
       font-size: 10px;
       font-weight: 800;
-      color: var(--muted);
-      background: color-mix(in srgb, var(--card) 82%, transparent);
+      color: #b9dcff;
+      background: linear-gradient(140deg, color-mix(in srgb, var(--info) 28%, transparent), color-mix(in srgb, var(--card) 84%, transparent));
       white-space: nowrap;
     }
     .stats {
@@ -153,6 +176,11 @@ function getHtml(n: string): string {
       border-radius: 8px;
       padding: 6px 7px;
       background: color-mix(in srgb, var(--card) 80%, transparent);
+      transition: transform 140ms ease, border-color 140ms ease;
+    }
+    .stat:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 35%, var(--border));
     }
     .stat .k { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
     .stat .v { margin-top: 1px; font-weight: 900; font-size: 14px; }
@@ -161,12 +189,27 @@ function getHtml(n: string): string {
     .stat.info .v { color: var(--info); }
 
     .card {
+      position: relative;
+      overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 12px;
       background: linear-gradient(160deg, color-mix(in srgb, var(--card) 88%, transparent), color-mix(in srgb, var(--bg) 95%, transparent));
       padding: 10px;
       margin-top: 9px;
       box-shadow: var(--shadow);
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+    .card:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 40%, var(--border));
+      box-shadow: 0 12px 28px rgba(0,0,0,0.24);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, color-mix(in srgb, white 9%, transparent), transparent 38%);
+      pointer-events: none;
     }
     .title {
       font-size: 11px;
@@ -262,6 +305,8 @@ function getHtml(n: string): string {
     .hidden { display: none !important; }
 
     .dropzone {
+      position: relative;
+      overflow: hidden;
       border: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
       border-radius: 10px;
       padding: 10px;
@@ -272,11 +317,21 @@ function getHtml(n: string): string {
       transition: border-color 120ms ease, background 120ms ease;
       cursor: pointer;
     }
+    .dropzone::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, transparent 22%, color-mix(in srgb, var(--info) 20%, transparent) 48%, transparent 76%);
+      transform: translateX(-140%);
+      transition: transform 350ms ease;
+      pointer-events: none;
+    }
     .dropzone:hover, .dropzone.drag {
       border-color: color-mix(in srgb, var(--focus) 55%, var(--border));
       background: color-mix(in srgb, var(--hover) 68%, var(--card));
       color: var(--fg);
     }
+    .dropzone:hover::after, .dropzone.drag::after { transform: translateX(120%); }
     .chips {
       margin-top: 7px;
       display: flex;
@@ -291,8 +346,12 @@ function getHtml(n: string): string {
       padding: 3px 9px;
       font-size: 11px;
       cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease;
     }
-    .chip:hover { border-color: color-mix(in srgb, var(--focus) 45%, var(--border)); }
+    .chip:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 45%, var(--border));
+    }
 
     .row {
       border: 1px solid var(--border);
@@ -312,6 +371,11 @@ function getHtml(n: string): string {
     }
 
     button {
+      position: relative;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       padding: 7px 11px;
       min-height: 32px;
       border-radius: 8px;
@@ -319,12 +383,29 @@ function getHtml(n: string): string {
       cursor: pointer;
       font-size: 12px;
       font-weight: 700;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .btnPrimary::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(102deg, transparent 20%, rgba(255,255,255,0.26) 50%, transparent 80%);
+      transform: translateX(-130%);
+      transition: transform 350ms ease;
     }
     .btnPrimary {
       background: linear-gradient(120deg, var(--vscode-button-background), color-mix(in srgb, var(--vscode-button-background) 78%, var(--info)));
       color: var(--vscode-button-foreground);
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--vscode-button-background) 35%, transparent);
     }
-    .btnSecondary { background: transparent; color: var(--fg); border-color: var(--border); }
+    .btnPrimary:hover::after { transform: translateX(120%); }
+    .btnSecondary {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--card) 84%, transparent), color-mix(in srgb, var(--bg) 94%, transparent));
+      color: var(--fg);
+      border-color: var(--border);
+    }
     .btnDanger { background: transparent; color: var(--vscode-errorForeground); border-color: var(--vscode-errorForeground); }
 
     .actions {
@@ -339,6 +420,7 @@ function getHtml(n: string): string {
       justify-content: space-between;
       align-items: center;
       gap: 8px;
+      box-shadow: 0 -6px 20px rgba(0,0,0,0.14);
     }
     .actionsRight { display: flex; gap: 6px; }
     .subtle { font-size: 11px; color: var(--muted); }
@@ -418,7 +500,7 @@ function getHtml(n: string): string {
 <div class="wrap">
   <div class="hero">
     <div class="heroHead">
-      <h1>FlowTest Start Intake</h1>
+      <h1><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h11"></path><path d="M4 17h7"></path><circle cx="18" cy="12" r="2"></circle></svg>FlowTest Start Intake</h1>
       <div class="pill">@flowtest minimal consumer mode</div>
     </div>
     <div class="hint">Upload success/failure samples + AID + HLD. FlowTest handles heavy lifting.</div>
@@ -516,9 +598,9 @@ function getHtml(n: string): string {
   <div class="actions">
     <div class="subtle">Click an attached file chip to preview JSON/content before run.</div>
     <div class="actionsRight">
-      <button class="btnSecondary" id="cancelBtn">Cancel</button>
-      <button class="btnSecondary" id="fakeBtn">Fake Run</button>
-      <button class="btnPrimary" id="startBtn">Start</button>
+      <button class="btnSecondary" id="cancelBtn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>Cancel</button>
+      <button class="btnSecondary" id="fakeBtn"><svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Fake Run</button>
+      <button class="btnPrimary" id="startBtn"><svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M13 5l7 7l-7 7"></path></svg>Start</button>
     </div>
   </div>
 </div>
