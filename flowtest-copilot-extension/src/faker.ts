@@ -10,6 +10,7 @@ export type FakeEvent = {
   status: "running" | "success" | "warn" | "error" | "info";
   title: string;
   detail?: string;
+  meta?: Record<string, string | number | boolean>;
   actions?: FakeAction[];
 };
 
@@ -132,15 +133,17 @@ export function createFakeRunFixture(): FakeRunFixture {
         stage: "UI",
         status: "running",
         title: "Status Panel Initialized",
-        detail: "Fake run bootstrapped for UI regression."
+        detail: "Fake run bootstrapped for UI regression.",
+        meta: { editor: "VS Code", extension: "flowtest-copilot", version: "0.0.1" }
       },
-      { time: "10:00:02", stage: "Intake", status: "success", title: "Received", detail: "5 docs captured." },
+      { time: "10:00:02", stage: "Intake", status: "success", title: "Received", detail: "5 docs captured.", meta: { docs: 5, mode: "multi_upload", format: "json" } },
       {
         time: "10:00:05",
         stage: "API Spec",
         status: "running",
         title: "Ai Request Dispatched",
         detail: "task=GENERATE_API_SPEC",
+        meta: { task: "GENERATE_API_SPEC", provider: "copilot", model: "copilot-selected-model", temperature: "default" },
         actions: [{
           label: "AI Request",
           title: "Fake API Spec Request",
@@ -153,6 +156,7 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Ai Response Received",
         detail: "17239 chars",
+        meta: { task: "GENERATE_API_SPEC", provider: "copilot", model: "copilot-selected-model", response_chars: 17239, duration_ms: 3200 },
         actions: [{
           label: "AI Response",
           title: "Fake API Spec Response",
@@ -165,6 +169,7 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Completed",
         detail: "Mappings generated.",
+        meta: { path: "/v1/eligibility/check", method: "POST", base_url: "http://localhost:8080", mappings: 1 },
         actions: [{ label: "Generated Mocks", title: "Fake WireMock Mappings", content: "[{ \"request\": { \"method\": \"POST\" }, \"response\": { \"status\": 200 } }]" }]
       },
       {
@@ -173,6 +178,7 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Completed",
         detail: "Scenario generated and validated.",
+        meta: { task: "GENERATE_SCENARIO_DSL", provider: "copilot", model: "copilot-selected-model", steps: 5, tags: "ui,api,db,async,vision" },
         actions: [{
           label: "Generated DSL",
           title: "Fake Scenario DSL",
@@ -185,6 +191,7 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Completed",
         detail: "HTTP 200",
+        meta: { endpoint: "http://localhost:9090/engine/run", method: "POST", status: 200, duration_ms: 28439, assertions_passed: 12, assertions_failed: 0 },
         actions: [{
           label: "Engine Output",
           title: "Fake Engine Result",
@@ -197,6 +204,7 @@ export function createFakeRunFixture(): FakeRunFixture {
         status: "success",
         title: "Persisted",
         detail: "/workspace/.flowtest-runs/fake",
+        meta: { output_path: "/workspace/.flowtest-runs/fake", files: 4 },
         actions: [{ label: "Output Files", title: "Fake Output Paths", content: "api-spec.md\nwiremock-mappings.json\nscenario.dsl.json\nengine-run-result.json" }]
       }
     ]

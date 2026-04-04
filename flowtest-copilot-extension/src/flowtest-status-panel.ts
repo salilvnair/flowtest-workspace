@@ -601,7 +601,7 @@ export class FlowtestStatusPanel {
     .rowTop { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     .time { font-family: var(--vscode-editor-font-family, monospace); color: var(--muted); font-size: 11px; }
     .titleWrap { display: inline-flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 auto; }
-    .title { font-weight: 700; }
+    .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10.5px; font-weight: 400; color: color-mix(in srgb, var(--muted) 68%, transparent); letter-spacing: 0.12px; line-height: 1.4; }
     .titleWrap .expandBtn {
       position: relative;
       z-index: 2;
@@ -637,7 +637,13 @@ export class FlowtestStatusPanel {
     .timerPill.done { color: #9ef0b7; }
     .timerDot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
     .timerPill { pointer-events: none; }
-    .detail { color: var(--muted); margin-top: 4px; white-space: pre-wrap; word-break: break-word; }
+    .detail { color: color-mix(in srgb, var(--muted) 62%, transparent); margin-top: 4px; white-space: pre-wrap; word-break: break-word; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10px; letter-spacing: 0.15px; line-height: 1.45; }
+    .metaTable { margin-top: 6px; border-collapse: collapse; width: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 10px; border-radius: 6px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 70%, transparent); }
+    .metaTable th { text-align: left; padding: 3px 8px; color: color-mix(in srgb, var(--muted) 82%, var(--fg)); background: color-mix(in srgb, var(--card) 60%, transparent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid var(--border); }
+    .metaTable td { padding: 3px 8px; color: var(--muted); border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent); word-break: break-all; }
+    .metaTable tr:last-child td { border-bottom: none; }
+    .metaTable .metaKey { color: color-mix(in srgb, var(--info) 80%, var(--muted)); font-weight: 500; white-space: nowrap; }
+    .metaTable .metaVal { color: var(--fg); opacity: 0.78; }
     .actions { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
     .actionBtn { border: 1px solid var(--border); border-radius: 999px; background: color-mix(in srgb, var(--card) 84%, transparent); color: var(--fg); font-size: 10px; line-height: 1; padding: 4px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
     .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
@@ -1208,6 +1214,12 @@ export class FlowtestStatusPanel {
           var first = code.querySelector('mark.searchHit');
           if (first && activeView === 'pretty') first.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }
+        // Raw tab
+        if (rawContent) {
+          highlightInContainer(rawContent, query);
+          var firstRaw = rawContent.querySelector('mark.searchHit');
+          if (firstRaw && activeView === 'raw') firstRaw.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
         // Tree tab
         if (treeContent) {
           // Clear old row highlights
@@ -1524,6 +1536,19 @@ export class FlowtestStatusPanel {
           }
           actionsHtml = '<div class="actions">' + arr.join('') + '</div>';
         }
+        let metaHtml = '';
+        if (ev.meta && typeof ev.meta === 'object') {
+          var metaKeys = Object.keys(ev.meta);
+          if (metaKeys.length > 0) {
+            var metaRows = [];
+            for (var mi = 0; mi < metaKeys.length; mi++) {
+              var mk = metaKeys[mi];
+              var mv = ev.meta[mk];
+              metaRows.push('<tr><td class="metaKey">' + esc(String(mk)) + '</td><td class="metaVal">' + esc(String(mv != null ? mv : '')) + '</td></tr>');
+            }
+            metaHtml = '<table class="metaTable"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>' + metaRows.join('') + '</tbody></table>';
+          }
+        }
         row.innerHTML =
           '<span class="dot"></span><div>'
           + '<div class="rowTop"><span class="time">' + esc(ev.time || '') + '</span>'
@@ -1532,7 +1557,7 @@ export class FlowtestStatusPanel {
           + '<span class="controlChip ' + cm.cls + '">' + cm.text + '</span>'
           + '<span class="titleWrap"><span class="title">' + esc(ev.title || '') + '</span>'
           + '<button class="expandBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></span></div>'
-          + '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + actionsHtml + '</div></div>';
+          + '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + metaHtml + actionsHtml + '</div></div>';
         timeline.appendChild(row);
         if (followLogs && followLogs.checked) timeline.scrollTop = timeline.scrollHeight;
       }
