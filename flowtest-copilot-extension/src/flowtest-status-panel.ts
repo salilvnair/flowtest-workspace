@@ -704,7 +704,7 @@ export class FlowtestStatusPanel {
     }
     .modalBody {
       margin: 0;
-      padding: 10px;
+      padding: 0;
       overflow: auto;
       white-space: normal;
       word-break: normal;
@@ -714,11 +714,92 @@ export class FlowtestStatusPanel {
       background: #11161d;
       flex: 1 1 auto;
       min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
+    /* --- Postman-style tab bar --- */
+    .viewTabs {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 0 10px;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      background: color-mix(in srgb, var(--card) 60%, #11161d);
+      flex: 0 0 auto;
+    }
+    .viewTabs .vtab {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 7px 12px 6px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 120ms, border-color 120ms;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .viewTabs .vtab:hover { color: var(--fg); }
+    .viewTabs .vtab.active { color: #79c0ff; border-bottom-color: #79c0ff; }
+    .viewTabs .vtabSpacer { flex: 1; }
+    .viewTabs .vtabSearch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 6px;
+      background: color-mix(in srgb, #0d1117 80%, transparent);
+      padding: 2px 6px;
+      margin: 2px 0;
+    }
+    .viewTabs .vtabSearch svg { width: 12px; height: 12px; stroke: var(--muted); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+    .viewTabs .vtabSearch input {
+      border: none;
+      background: transparent;
+      color: var(--fg);
+      font-size: 11px;
+      font-family: inherit;
+      outline: none;
+      width: 120px;
+      padding: 2px 0;
+    }
+    .viewTabs .vtabSearch input::placeholder { color: var(--muted); }
+    .viewStatus {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 10px;
+      flex: 0 0 auto;
+    }
+    .viewStatus .statusChip {
+      font-size: 10px;
+      color: var(--muted);
+      padding: 2px 0;
+    }
+    /* --- view panels --- */
+    .viewPanel { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .viewPanel.active { display: flex; flex-direction: column; }
+    /* --- Pretty view with line numbers --- */
+    .prettyWrap { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; }
+    .lineNums {
+      flex: 0 0 auto;
+      padding: 12px 0;
+      text-align: right;
+      user-select: none;
+      color: #484f58;
+      font-family: var(--vscode-editor-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      line-height: 1.5;
+      border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+      background: #0c1018;
+      min-width: 36px;
+    }
+    .lineNums span { display: block; padding: 0 8px 0 10px; }
     .codeLang {
       display: inline-flex;
       align-items: center;
-      margin-bottom: 8px;
+      margin: 10px 10px 0;
       border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
       border-radius: 999px;
       padding: 2px 8px;
@@ -733,11 +814,11 @@ export class FlowtestStatusPanel {
       margin: 0;
       width: max-content;
       min-width: 100%;
-      border-radius: 8px;
-      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: 0;
+      border: none;
       overflow: auto;
       background: #0d1117;
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.03) inset;
+      flex: 1 1 auto;
     }
     .codeFrame code {
       display: block;
@@ -755,7 +836,53 @@ export class FlowtestStatusPanel {
     .tok-bool { color: #c3a6ff; }
     .tok-null { color: #8b949e; font-style: italic; }
     .tok-punc { color: #9aa4b0; }
-    .codeLang { margin-bottom: 6px; display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; font-size: 10px; color: #9fd1ff; background: color-mix(in srgb, #9fd1ff 16%, transparent); text-transform: uppercase; font-weight: 700; letter-spacing: 0.2px; }
+    mark.searchHit { background: #e2c08d44; color: inherit; border-radius: 2px; outline: 1px solid #e2c08d88; }
+    /* --- Raw view --- */
+    .rawView { padding: 12px; font-family: var(--vscode-editor-font-family, monospace); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: #d4dee9; background: #0d1117; flex: 1; overflow: auto; }
+    /* --- Tree view (Postman-style) --- */
+    .treeView { padding: 8px 0; overflow: auto; flex: 1; background: #0d1117; }
+    .treeNode { font-size: 12px; line-height: 1.6; font-family: var(--vscode-editor-font-family, monospace); }
+    .treeRow { display: flex; align-items: flex-start; padding: 1px 0 1px 0; cursor: default; }
+    .treeRow:hover { background: color-mix(in srgb, #79c0ff 8%, transparent); }
+    .treeToggle {
+      flex: 0 0 16px;
+      width: 16px;
+      height: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #6e7681;
+      font-size: 10px;
+      user-select: none;
+      transition: transform 120ms ease;
+      margin-top: 2px;
+    }
+    .treeToggle.collapsed { transform: rotate(-90deg); }
+    .treeToggle.leaf { visibility: hidden; }
+    .treeKey { color: #79c0ff; font-weight: 700; margin-right: 4px; white-space: nowrap; }
+    .treeColon { color: #9aa4b0; margin-right: 6px; }
+    .treeVal { color: #d4dee9; }
+    .treeVal.str { color: #a5d6ff; }
+    .treeVal.num { color: #f2cc8f; }
+    .treeVal.bool { color: #c3a6ff; }
+    .treeVal.null { color: #8b949e; font-style: italic; }
+    .treeBrace { color: #9aa4b0; font-weight: 400; }
+    .treeType { font-size: 10px; color: #6e7681; margin-left: 6px; font-style: italic; font-weight: 400; }
+    .treeChildren { padding-left: 18px; overflow: hidden; }
+    .treeChildren.hidden { display: none; }
+    .treeCopyBtn {
+      opacity: 0;
+      border: none;
+      background: transparent;
+      color: #9fd1ff;
+      cursor: pointer;
+      padding: 0 4px;
+      font-size: 10px;
+      transition: opacity 120ms;
+    }
+    .treeRow:hover .treeCopyBtn { opacity: 0.6; }
+    .treeCopyBtn:hover { opacity: 1 !important; }
   </style>
 </head>
 <body>
@@ -838,7 +965,21 @@ export class FlowtestStatusPanel {
           </button>
         </div>
       </div>
-      <div class="modalBody" id="modalBody"></div>
+      <div class="modalBody" id="modalBody">
+        <div class="viewTabs" id="viewTabs">
+          <button class="vtab active" data-view="pretty" type="button">Pretty</button>
+          <button class="vtab" data-view="raw" type="button">Raw</button>
+          <button class="vtab" data-view="tree" type="button">Tree</button>
+          <span class="vtabSpacer"></span>
+          <span class="vtabSearch">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.35-4.35"></path></svg>
+            <input id="modalSearchInput" type="text" placeholder="Search..." />
+          </span>
+        </div>
+        <div class="viewPanel active" id="vpPretty"></div>
+        <div class="viewPanel" id="vpRaw"><div class="rawView" id="rawContent"></div></div>
+        <div class="viewPanel" id="vpTree"><div class="treeView" id="treeContent"></div></div>
+      </div>
     </div>
   </div>
   <script>
@@ -971,17 +1112,345 @@ export class FlowtestStatusPanel {
         if (t.startsWith('<')) return 'xml';
         return 'text';
       }
+      function decodeEscapedJsonIfNeeded(input) {
+        var raw = String(input || '');
+        var t = raw.trim();
+        if (!t) return raw;
+        if ((t.charAt(0) === '{' && t.charAt(t.length - 1) === '}') || (t.charAt(0) === '[' && t.charAt(t.length - 1) === ']')) return raw;
+        try {
+          if (t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') {
+            var unwrapped = JSON.parse(t);
+            if (typeof unwrapped === 'string') return unwrapped;
+          }
+        } catch (e) {}
+        if (t.indexOf(String.fromCharCode(92)) !== -1 && t.indexOf(String.fromCharCode(10)) === -1) {
+          try { return JSON.parse('"' + t + '"'); } catch (e) {}
+        }
+        return raw;
+      }
+      const vpPretty = document.getElementById('vpPretty');
+      const vpRaw = document.getElementById('vpRaw');
+      const vpTree = document.getElementById('vpTree');
+      const rawContent = document.getElementById('rawContent');
+      const treeContent = document.getElementById('treeContent');
+      const viewTabs = document.getElementById('viewTabs');
+      const modalSearchInput = document.getElementById('modalSearchInput');
+
+      let parsedJson = null;
+      let activeView = 'pretty';
+
+      /* --- Tab switching --- */
+      if (viewTabs) viewTabs.addEventListener('click', (e) => {
+        const tab = e.target && e.target.closest ? e.target.closest('.vtab') : null;
+        if (!tab) return;
+        const view = tab.getAttribute('data-view');
+        if (!view || view === activeView) return;
+        activeView = view;
+        viewTabs.querySelectorAll('.vtab').forEach(function(t) { t.classList.toggle('active', t === tab); });
+        [vpPretty, vpRaw, vpTree].forEach(function(p) { if (p) p.classList.remove('active'); });
+        if (view === 'pretty' && vpPretty) vpPretty.classList.add('active');
+        if (view === 'raw' && vpRaw) vpRaw.classList.add('active');
+        if (view === 'tree' && vpTree) vpTree.classList.add('active');
+      });
+
+      /* --- Search --- */
+      if (modalSearchInput) modalSearchInput.addEventListener('input', function() {
+        const q = modalSearchInput.value.trim();
+        highlightSearch(q);
+      });
+
+      function highlightSearch(query) {
+        if (!vpPretty) return;
+        var code = vpPretty.querySelector('code');
+        if (!code) return;
+        // Remove old highlights
+        code.querySelectorAll('mark.searchHit').forEach(function(m) {
+          var parent = m.parentNode;
+          if (parent) { parent.replaceChild(document.createTextNode(m.textContent || ''), m); parent.normalize(); }
+        });
+        if (!query) return;
+        var walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT, null);
+        var hits = [];
+        var node;
+        while ((node = walker.nextNode())) {
+          var text = node.textContent || '';
+          var lower = text.toLowerCase();
+          var qLower = query.toLowerCase();
+          var idx = lower.indexOf(qLower);
+          if (idx !== -1) hits.push({ node: node, idx: idx, len: query.length });
+        }
+        for (var i = hits.length - 1; i >= 0; i--) {
+          var h = hits[i];
+          var range = document.createRange();
+          range.setStart(h.node, h.idx);
+          range.setEnd(h.node, h.idx + h.len);
+          var mark = document.createElement('mark');
+          mark.className = 'searchHit';
+          range.surroundContents(mark);
+        }
+        var first = code.querySelector('mark.searchHit');
+        if (first) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+
+      /* --- Tree builder (Postman style) --- */
+      function buildTreeNode(key, value, depth) {
+        var wrap = document.createElement('div');
+        wrap.className = 'treeNode';
+        var row = document.createElement('div');
+        row.className = 'treeRow';
+        row.style.paddingLeft = (depth * 18 + 8) + 'px';
+
+        var isObj = value !== null && typeof value === 'object';
+        var isArr = Array.isArray(value);
+        var hasKids = isObj && (isArr ? value.length > 0 : Object.keys(value).length > 0);
+
+        // Toggle arrow
+        var toggle = document.createElement('span');
+        toggle.className = 'treeToggle' + (hasKids ? '' : ' leaf');
+        toggle.textContent = hasKids ? '▼' : '';
+
+        // Key
+        var keyEl = null;
+        if (key !== null) {
+          keyEl = document.createElement('span');
+          keyEl.className = 'treeKey';
+          keyEl.textContent = JSON.stringify(key);
+          var colon = document.createElement('span');
+          colon.className = 'treeColon';
+          colon.textContent = ':';
+        }
+
+        // Value or brace
+        var valEl = document.createElement('span');
+        valEl.className = 'treeVal';
+        if (isArr) {
+          valEl.innerHTML = '<span class="treeBrace">[</span>';
+          if (!hasKids) valEl.innerHTML = '<span class="treeBrace">[]</span>';
+          var typeHint = document.createElement('span');
+          typeHint.className = 'treeType';
+          typeHint.textContent = value.length + ' item' + (value.length !== 1 ? 's' : '');
+          valEl.appendChild(typeHint);
+        } else if (isObj) {
+          var count = Object.keys(value).length;
+          valEl.innerHTML = '<span class="treeBrace">{</span>';
+          if (!hasKids) valEl.innerHTML = '<span class="treeBrace">{}</span>';
+          var typeHint2 = document.createElement('span');
+          typeHint2.className = 'treeType';
+          typeHint2.textContent = count + ' key' + (count !== 1 ? 's' : '');
+          valEl.appendChild(typeHint2);
+        } else if (value === null) {
+          valEl.className = 'treeVal null';
+          valEl.textContent = 'null';
+        } else if (typeof value === 'string') {
+          valEl.className = 'treeVal str';
+          valEl.textContent = JSON.stringify(value);
+        } else if (typeof value === 'number') {
+          valEl.className = 'treeVal num';
+          valEl.textContent = String(value);
+        } else if (typeof value === 'boolean') {
+          valEl.className = 'treeVal bool';
+          valEl.textContent = String(value);
+        } else {
+          valEl.textContent = String(value);
+        }
+
+        // Copy button for leaf values
+        var copyBtn = document.createElement('button');
+        copyBtn.className = 'treeCopyBtn';
+        copyBtn.textContent = '📋';
+        copyBtn.title = 'Copy value';
+        copyBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var copyVal = (isObj) ? JSON.stringify(value, null, 2) : String(value);
+          navigator.clipboard.writeText(copyVal).catch(function() {});
+          copyBtn.textContent = '✓';
+          setTimeout(function() { copyBtn.textContent = '📋'; }, 800);
+        });
+
+        row.appendChild(toggle);
+        if (keyEl) { row.appendChild(keyEl); row.appendChild(colon); }
+        row.appendChild(valEl);
+        row.appendChild(copyBtn);
+        wrap.appendChild(row);
+
+        if (hasKids) {
+          var children = document.createElement('div');
+          children.className = 'treeChildren';
+          if (isArr) {
+            for (var i = 0; i < value.length; i++) {
+              children.appendChild(buildTreeNode(String(i), value[i], depth + 1));
+            }
+            // closing bracket
+            var closingArr = document.createElement('div');
+            closingArr.className = 'treeRow';
+            closingArr.style.paddingLeft = (depth * 18 + 8 + 16) + 'px';
+            closingArr.innerHTML = '<span class="treeBrace">]</span>';
+            children.appendChild(closingArr);
+          } else {
+            var keys = Object.keys(value);
+            for (var j = 0; j < keys.length; j++) {
+              children.appendChild(buildTreeNode(keys[j], value[keys[j]], depth + 1));
+            }
+            var closingObj = document.createElement('div');
+            closingObj.className = 'treeRow';
+            closingObj.style.paddingLeft = (depth * 18 + 8 + 16) + 'px';
+            closingObj.innerHTML = '<span class="treeBrace">}</span>';
+            children.appendChild(closingObj);
+          }
+          wrap.appendChild(children);
+
+          // Toggle collapse
+          toggle.addEventListener('click', function() {
+            var isHidden = children.classList.contains('hidden');
+            children.classList.toggle('hidden');
+            toggle.classList.toggle('collapsed', !isHidden);
+            // Show inline summary when collapsed
+            if (!isHidden) {
+              var closing = isArr ? ']' : '}';
+              valEl.querySelector('.treeType').textContent = (isArr ? value.length + ' item' + (value.length !== 1 ? 's' : '') : Object.keys(value).length + ' key' + (Object.keys(value).length !== 1 ? 's' : ''))
+                + ' … ' + closing;
+            } else {
+              valEl.querySelector('.treeType').textContent = isArr
+                ? value.length + ' item' + (value.length !== 1 ? 's' : '')
+                : Object.keys(value).length + ' key' + (Object.keys(value).length !== 1 ? 's' : '');
+            }
+          });
+
+          // Row click also toggles
+          row.addEventListener('click', function(e) {
+            if (e.target === copyBtn) return;
+            toggle.click();
+          });
+          row.style.cursor = 'pointer';
+        }
+
+        return wrap;
+      }
+
+      function renderTree(parsed) {
+        if (!treeContent) return;
+        treeContent.innerHTML = '';
+        if (parsed === null || typeof parsed !== 'object') {
+          treeContent.innerHTML = '<div style="padding:12px;color:var(--muted);">Not a JSON object/array</div>';
+          return;
+        }
+        treeContent.appendChild(buildTreeNode(null, parsed, 0));
+      }
+      function jsonIndent(level) { return '  '.repeat(Math.max(0, level)); }
+      function jsonToHtml(value, level) {
+        if (value === null) return '<span class="tok-null">null</span>';
+        if (typeof value === 'string') return '<span class="tok-str">' + esc(JSON.stringify(value)) + '</span>';
+        if (typeof value === 'number') return '<span class="tok-num">' + esc(String(value)) + '</span>';
+        if (typeof value === 'boolean') return '<span class="tok-bool">' + esc(String(value)) + '</span>';
+        if (Array.isArray(value)) {
+          if (value.length === 0) return '<span class="tok-punc">[</span><span class="tok-punc">]</span>';
+          var out = '<span class="tok-punc">[</span>\\n';
+          for (var i = 0; i < value.length; i++) {
+            out += jsonIndent(level + 1) + jsonToHtml(value[i], level + 1);
+            if (i < value.length - 1) out += '<span class="tok-punc">,</span>';
+            out += '\\n';
+          }
+          return out + jsonIndent(level) + '<span class="tok-punc">]</span>';
+        }
+        if (typeof value === 'object') {
+          var entries = Object.entries(value);
+          if (entries.length === 0) return '<span class="tok-punc">{</span><span class="tok-punc">}</span>';
+          var out2 = '<span class="tok-punc">{</span>\\n';
+          for (var j = 0; j < entries.length; j++) {
+            var pair = entries[j];
+            out2 += jsonIndent(level + 1)
+              + '<span class="tok-key">' + esc(JSON.stringify(pair[0])) + '</span>'
+              + '<span class="tok-punc">: </span>'
+              + jsonToHtml(pair[1], level + 1);
+            if (j < entries.length - 1) out2 += '<span class="tok-punc">,</span>';
+            out2 += '\\n';
+          }
+          return out2 + jsonIndent(level) + '<span class="tok-punc">}</span>';
+        }
+        return esc(String(value));
+      }
+
+      function countLines(text) {
+        if (!text) return 0;
+        var n = 1;
+        for (var i = 0; i < text.length; i++) { if (text.charAt(i) === String.fromCharCode(10)) n++; }
+        return n;
+      }
+
+      function buildLineNums(count) {
+        var parts = [];
+        for (var i = 1; i <= count; i++) parts.push('<span>' + i + '</span>');
+        return parts.join('');
+      }
+
       function renderModalContent(content, title) {
-        const text = String(content || '');
+        const source = decodeEscapedJsonIfNeeded(content);
+        const text = String(source || '');
         modalLang = detectLang(text, title);
+        parsedJson = null;
+
+        // Reset tabs to Pretty
+        activeView = 'pretty';
+        if (viewTabs) {
+          viewTabs.querySelectorAll('.vtab').forEach(function(t) {
+            t.classList.toggle('active', t.getAttribute('data-view') === 'pretty');
+          });
+        }
+        [vpPretty, vpRaw, vpTree].forEach(function(p) { if (p) p.classList.remove('active'); });
+        if (vpPretty) vpPretty.classList.add('active');
+        if (modalSearchInput) modalSearchInput.value = '';
+
         if (modalLang === 'json') {
-          try { modalText = JSON.stringify(JSON.parse(text), null, 2); }
-          catch { modalText = text; }
+          try {
+            parsedJson = JSON.parse(text);
+            modalText = JSON.stringify(parsedJson, null, 2);
+
+            // Pretty view with line numbers + syntax highlighting
+            var lineCount = countLines(modalText);
+            if (vpPretty) {
+              vpPretty.innerHTML =
+                '<div class="prettyWrap">'
+                + '<div class="lineNums">' + buildLineNums(lineCount) + '</div>'
+                + '<pre class="codeFrame"><code>' + jsonToHtml(parsedJson, 0) + '</code></pre>'
+                + '</div>';
+            }
+
+            // Raw view
+            if (rawContent) rawContent.textContent = text;
+
+            // Tree view
+            renderTree(parsedJson);
+
+            // Show tree tab
+            if (viewTabs) {
+              var treeTab = viewTabs.querySelector('[data-view="tree"]');
+              if (treeTab) treeTab.style.display = '';
+            }
+            return;
+          } catch (e) {
+            modalText = text;
+          }
         } else {
           modalText = text;
         }
-        const label = modalLang.toUpperCase();
-        if (modalBody) modalBody.innerHTML = '<div class="codeLang">' + esc(label) + '</div><pre class="codeFrame"><code>' + esc(modalText) + '</code></pre>';
+        // Non-JSON or parse failed
+        var label = modalLang.toUpperCase();
+        var lc = countLines(modalText);
+        if (vpPretty) {
+          vpPretty.innerHTML =
+            '<div class="codeLang">' + esc(label) + '</div>'
+            + '<div class="prettyWrap">'
+            + '<div class="lineNums">' + buildLineNums(lc) + '</div>'
+            + '<pre class="codeFrame"><code>' + esc(modalText) + '</code></pre>'
+            + '</div>';
+        }
+        if (rawContent) rawContent.textContent = modalText;
+        // Hide tree tab for non-JSON
+        if (viewTabs) {
+          var treeTab2 = viewTabs.querySelector('[data-view="tree"]');
+          if (treeTab2) treeTab2.style.display = 'none';
+        }
+        if (treeContent) treeContent.innerHTML = '';
       }
       function addEvent(ev) {
         if (!timeline) return;
