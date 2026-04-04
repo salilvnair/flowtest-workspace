@@ -24,3 +24,8 @@ flowtest-parent/allure-report/
 # VS Code extension build output
 flowtest-copilot-extension/dist/
 *.vsix
+
+# Local environment files
+**/.env.local
+**/.env.*.local
+**/.next

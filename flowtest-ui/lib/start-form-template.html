@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-form-nonce'; script-src 'nonce-form-nonce';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style nonce="form-nonce">
+    :root {
+      --bg: var(--vscode-editor-background);
+      --fg: var(--vscode-editor-foreground);
+      --muted: var(--vscode-descriptionForeground, rgba(127,127,127,0.85));
+      --border: color-mix(in srgb, var(--vscode-panel-border, rgba(127,127,127,0.35)) 75%, transparent);
+      --card: color-mix(in srgb, var(--vscode-editorWidget-background, rgba(127,127,127,0.04)) 88%, transparent);
+      --hover: color-mix(in srgb, var(--vscode-list-hoverBackground, rgba(127,127,127,0.09)) 88%, transparent);
+      --focus: var(--vscode-focusBorder, #3794ff);
+      --ok: var(--vscode-charts-green, #89d185);
+      --bad: var(--vscode-charts-red, #f14c4c);
+      --info: var(--vscode-charts-blue, #3794ff);
+      --shadow: 0 10px 24px rgba(0,0,0,0.18);
+    }
+    * { box-sizing: border-box; }
+    @keyframes ftFadeInUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes ftShine {
+      0% { transform: translateX(-120%); opacity: 0; }
+      30% { opacity: 0.42; }
+      100% { transform: translateX(140%); opacity: 0; }
+    }
+    body {
+      margin: 0;
+      padding: 14px;
+      font-family: var(--vscode-font-family);
+      color: var(--fg);
+      background:
+        radial-gradient(700px 300px at -10% -30%, color-mix(in srgb, var(--info) 14%, transparent), transparent 65%),
+        radial-gradient(780px 340px at 115% 115%, color-mix(in srgb, var(--ok) 11%, transparent), transparent 65%),
+        var(--bg);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    .wrap { max-width: 980px; margin: 0 auto; padding-bottom: 72px; }
+    .hero, .card, .actions { animation: ftFadeInUp 260ms ease both; }
+    .card { animation-delay: 30ms; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: linear-gradient(160deg, color-mix(in srgb, var(--card) 90%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(104deg, transparent 22%, color-mix(in srgb, var(--info) 26%, transparent) 46%, transparent 73%);
+      transform: translateX(-130%);
+      animation: ftShine 7s ease-in-out infinite;
+      pointer-events: none;
+    }
+    .heroHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .hero h1 { margin: 0; font-size: 15px; font-weight: 900; letter-spacing: 0.2px; display: inline-flex; align-items: center; gap: 8px; }
+    .hero h1 svg { width: 16px; height: 16px; stroke: #9fd1ff; fill: none; stroke-width: 2; }
+    .hint { color: var(--muted); margin-top: 4px; }
+    .pill {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 10px;
+      font-weight: 800;
+      color: #b9dcff;
+      background: linear-gradient(140deg, color-mix(in srgb, var(--info) 28%, transparent), color-mix(in srgb, var(--card) 84%, transparent));
+      white-space: nowrap;
+    }
+    .stats {
+      margin-top: 8px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 7px;
+    }
+    .stat {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 7px;
+      background: color-mix(in srgb, var(--card) 80%, transparent);
+      transition: transform 140ms ease, border-color 140ms ease;
+    }
+    .stat:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 35%, var(--border));
+    }
+    .stat .k { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .stat .v { margin-top: 1px; font-weight: 900; font-size: 14px; }
+    .stat.ok .v { color: var(--ok); }
+    .stat.bad .v { color: var(--bad); }
+    .stat.info .v { color: var(--info); }
+
+    .card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: linear-gradient(160deg, color-mix(in srgb, var(--card) 88%, transparent), color-mix(in srgb, var(--bg) 95%, transparent));
+      padding: 10px;
+      margin-top: 9px;
+      box-shadow: var(--shadow);
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+    .card:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 40%, var(--border));
+      box-shadow: 0 12px 28px rgba(0,0,0,0.24);
+    }
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, color-mix(in srgb, white 9%, transparent), transparent 38%);
+      pointer-events: none;
+    }
+    .title {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.35px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    .badge {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      min-width: 70px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 900;
+      padding: 3px 10px;
+      letter-spacing: 0.25px;
+    }
+    .badge.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+    .badge.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }
+    .badge.info { color: var(--info); background: color-mix(in srgb, var(--info) 13%, transparent); }
+
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field > label { font-size: 11px; color: color-mix(in srgb, var(--fg) 78%, var(--muted)); }
+    input, textarea {
+      width: 100%;
+      min-height: 30px;
+      padding: 7px 9px;
+      font-size: 12px;
+      color: var(--vscode-input-foreground);
+      background: var(--vscode-input-background);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 8px;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: var(--focus);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus) 45%, transparent);
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    .toggleRow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      background: color-mix(in srgb, var(--card) 76%, transparent);
+      margin-top: 8px;
+    }
+    .toggleMeta b { font-size: 12px; }
+    .toggleMeta div { color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .switch {
+      position: relative;
+      width: 42px;
+      height: 24px;
+      display: inline-block;
+    }
+    .switch input { display: none; }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: color-mix(in srgb, var(--muted) 28%, transparent);
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      transition: all 140ms ease;
+      cursor: pointer;
+    }
+    .slider:before {
+      content: "";
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 2px;
+      top: 2px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 140ms ease;
+    }
+    .switch input:checked + .slider {
+      background: color-mix(in srgb, var(--info) 38%, transparent);
+      border-color: color-mix(in srgb, var(--info) 70%, var(--border));
+    }
+    .switch input:checked + .slider:before { transform: translateX(18px); }
+
+    .hidden { display: none !important; }
+
+    .dropzone {
+      position: relative;
+      overflow: hidden;
+      border: 1px dashed color-mix(in srgb, var(--border) 85%, transparent);
+      border-radius: 10px;
+      padding: 10px;
+      background: color-mix(in srgb, var(--card) 78%, transparent);
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+      transition: border-color 120ms ease, background 120ms ease;
+      cursor: pointer;
+    }
+    .dropzone::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(105deg, transparent 22%, color-mix(in srgb, var(--info) 20%, transparent) 48%, transparent 76%);
+      transform: translateX(-140%);
+      transition: transform 350ms ease;
+      pointer-events: none;
+    }
+    .dropzone:hover, .dropzone.drag {
+      border-color: color-mix(in srgb, var(--focus) 55%, var(--border));
+      background: color-mix(in srgb, var(--hover) 68%, var(--card));
+      color: var(--fg);
+    }
+    .dropzone:hover::after, .dropzone.drag::after { transform: translateX(120%); }
+    .chips {
+      margin-top: 7px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--card) 80%, transparent);
+      color: var(--fg);
+      padding: 3px 9px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease;
+    }
+    .chip:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--focus) 45%, var(--border));
+    }
+
+    .row {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px;
+      margin-top: 8px;
+      background: color-mix(in srgb, var(--card) 84%, transparent);
+    }
+    .rowTop { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .rowMeta {
+      margin-top: 6px;
+      padding: 5px 7px;
+      border-radius: 8px;
+      border: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    button {
+      position: relative;
+      overflow: hidden;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 11px;
+      min-height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--vscode-button-border, transparent);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 700;
+      transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .btnPrimary::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(102deg, transparent 20%, rgba(255,255,255,0.26) 50%, transparent 80%);
+      transform: translateX(-130%);
+      transition: transform 350ms ease;
+    }
+    .btnPrimary {
+      background: linear-gradient(120deg, var(--vscode-button-background), color-mix(in srgb, var(--vscode-button-background) 78%, var(--info)));
+      color: var(--vscode-button-foreground);
+      box-shadow: 0 8px 18px color-mix(in srgb, var(--vscode-button-background) 35%, transparent);
+    }
+    .btnPrimary:hover::after { transform: translateX(120%); }
+    .btnSecondary {
+      background: linear-gradient(145deg, color-mix(in srgb, var(--card) 84%, transparent), color-mix(in srgb, var(--bg) 94%, transparent));
+      color: var(--fg);
+      border-color: var(--border);
+    }
+    .btnDanger { background: transparent; color: var(--vscode-errorForeground); border-color: var(--vscode-errorForeground); }
+
+    .actions {
+      position: sticky;
+      bottom: 0;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px;
+      background: linear-gradient(to bottom, color-mix(in srgb, var(--card) 50%, transparent), color-mix(in srgb, var(--card) 96%, transparent));
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 -6px 20px rgba(0,0,0,0.14);
+    }
+    .actionsRight { display: flex; gap: 6px; }
+    .subtle { font-size: 11px; color: var(--muted); }
+
+    .status {
+      margin-top: 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .status b { color: var(--fg); }
+
+    .modalBack {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      padding: 12px;
+    }
+    .modalBack.show { display: flex; }
+    .modal {
+      width: min(880px, 96vw);
+      max-height: 88vh;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+    .modalHead {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      font-weight: 700;
+    }
+    .modalBody {
+      overflow: auto;
+      padding: 10px;
+    }
+    .modalBody pre {
+      margin: 0;
+      font-size: 11px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: color-mix(in srgb, var(--fg) 92%, var(--muted));
+    }
+    .modalFoot {
+      border-top: 1px solid var(--border);
+      padding: 8px 10px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    @media (max-width: 820px) {
+      .stats { grid-template-columns: 1fr 1fr; }
+      .grid2 { grid-template-columns: 1fr; }
+      .rowTop { grid-template-columns: 1fr; }
+      .actions { flex-direction: column; align-items: flex-start; }
+      .actionsRight { width: 100%; justify-content: flex-end; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="heroHead">
+      <h1><svg viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h11"></path><path d="M4 17h7"></path><circle cx="18" cy="12" r="2"></circle></svg>FlowTest Start Intake</h1>
+      <div class="pill">@flowtest minimal consumer mode</div>
+    </div>
+    <div class="hint">Upload success/failure samples + AID + HLD. FlowTest handles heavy lifting.</div>
+    <div class="stats">
+      <div class="stat ok"><div class="k">Success</div><div class="v" id="metricSuccess">0</div></div>
+      <div class="stat bad"><div class="k">Failure</div><div class="v" id="metricFailure">0</div></div>
+      <div class="stat info"><div class="k">Docs</div><div class="v" id="metricDocs">0/2</div></div>
+      <div class="stat info"><div class="k">Readiness</div><div class="v" id="metricReady">Draft</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title"><span class="badge info">Run</span>Run Setup</div>
+    <div class="grid2">
+      <div class="field">
+        <label>Run Name</label>
+        <input id="runName" value="flowtest-zapper-run" />
+      </div>
+      <div class="field">
+        <label>Output Path (optional)</label>
+        <input id="outputPath" placeholder="/absolute/path/to/store/generated-outputs" />
+      </div>
+    </div>
+    <div class="toggleRow">
+      <div class="toggleMeta">
+        <b>Multi Upload Mode</b>
+        <div>ON: drag/drop many files with instant preview. OFF: existing row form mode.</div>
+      </div>
+      <label class="switch" title="Toggle multi upload mode">
+        <input id="multiToggle" type="checkbox" checked />
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title"><span class="badge info">Folder</span>Samples, Doc, AID</div>
+    <div class="dropzone" id="folderDropzone">Drop folder here — auto-detects aid, docs/hld, samples (success/failure)</div>
+    <div class="chips" id="folderChips"></div>
+  </div>
+
+  <div class="card">
+    <div class="title"><span class="badge ok">Success</span>Success Samples</div>
+
+    <div id="successMultiWrap">
+      <input id="successMultiFile" type="file" multiple class="hidden" accept=".json,.txt,.log,.md" />
+      <div class="dropzone" id="successDropzone">Drop success sample files here, or click to upload multiple files</div>
+      <div class="chips" id="successChips"></div>
+    </div>
+
+    <div id="successRowsWrap" class="hidden">
+      <div id="successRows"></div>
+      <div style="margin-top:8px;"><button class="btnSecondary" id="addSuccessBtn">+ Add Success Sample</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title"><span class="badge bad">Failure</span>Failure Samples</div>
+
+    <div id="failureMultiWrap">
+      <input id="failureMultiFile" type="file" multiple class="hidden" accept=".json,.txt,.log,.md" />
+      <div class="dropzone" id="failureDropzone">Drop failure sample files here, or click to upload multiple files</div>
+      <div class="chips" id="failureChips"></div>
+    </div>
+
+    <div id="failureRowsWrap" class="hidden">
+      <div id="failureRows"></div>
+      <div style="margin-top:8px;"><button class="btnSecondary" id="addFailureBtn">+ Add Failure Sample</button></div>
+    </div>
+  </div>
+
+  <div class="card hidden" id="additionalInfoCard">
+    <div class="title"><span class="badge info">Prompt</span>Additional Information</div>
+    <div class="field">
+      <label>Extra context to include in AI prompt (row mode)</label>
+      <textarea id="additionalInfo" placeholder="Add business rules, constraints, edge-cases, priorities, etc..."></textarea>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="title"><span class="badge info">Docs</span>AID & HLD</div>
+    <div class="grid2">
+      <div class="field">
+        <label>AID (single file)</label>
+        <input id="aidFile" type="file" accept=".json,.txt,.md,.csv,.xlsx,.doc,.docx" />
+        <div class="dropzone" id="aidDropzone">Drop AID file here (single file), or click to upload</div>
+        <div class="rowMeta" id="aidMeta">No AID file selected.</div>
+        <textarea id="aidContent" placeholder="Or paste AID content here..."></textarea>
+      </div>
+      <div class="field">
+        <label>HLD (single file)</label>
+        <input id="hldFile" type="file" accept=".json,.txt,.md,.doc,.docx" />
+        <div class="dropzone" id="hldDropzone">Drop HLD file here (single file), or click to upload</div>
+        <div class="rowMeta" id="hldMeta">No HLD file selected.</div>
+        <textarea id="hldContent" placeholder="Or paste HLD content here..."></textarea>
+      </div>
+    </div>
+    <div class="status">Validation: <b id="validationText">Need at least one success sample + AID + HLD</b></div>
+  </div>
+
+  <div class="actions">
+    <div class="subtle">Click an attached file chip to preview JSON/content before run.</div>
+    <div class="actionsRight">
+      <button class="btnSecondary" id="cancelBtn"><svg viewBox="0 0 24 24"><path d="M18 6L6 18"></path><path d="M6 6l12 12"></path></svg>Cancel</button>
+      <button class="btnSecondary" id="fakeBtn"><svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>Fake Run</button>
+      <button class="btnPrimary" id="startBtn"><svg viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="M13 5l7 7l-7 7"></path></svg>Start</button>
+    </div>
+  </div>
+</div>
+
+<div class="modalBack" id="previewBack">
+  <div class="modal">
+    <div class="modalHead">
+      <span id="previewTitle">Sample Preview</span>
+    </div>
+    <div class="modalBody">
+      <pre id="previewContent"></pre>
+    </div>
+  </div>
+</div>
+
+<script>
+window.acquireVsCodeApi = function(){
+  return {
+    postMessage: function(msg){ try { window.parent.postMessage({ __ftWebview: true, msg: msg }, '*'); } catch(e) {} },
+    setState: function(){},
+    getState: function(){ return null; }
+  };
+};
+</script>
+<script nonce="form-nonce">
+  const vscode = acquireVsCodeApi();
+  let idCounter = 0;
+
+  const state = {
+    multiUpload: true,
+    successUploads: [],
+    failureUploads: []
+  };
+
+  function makeId() {
+    idCounter += 1;
+    return 'row_' + idCounter;
+  }
+
+  function normalizePreview(content) {
+    const raw = String(content || '');
+    try {
+      const parsed = JSON.parse(raw);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return raw;
+    }
+  }
+
+  function openPreview(title, content) {
+    document.getElementById('previewTitle').textContent = title || 'Preview';
+    document.getElementById('previewContent').textContent = normalizePreview(content);
+    document.getElementById('previewBack').classList.add('show');
+  }
+
+  function closePreview() {
+    document.getElementById('previewBack').classList.remove('show');
+  }
+
+  function createChip(doc, onRemove) {
+    const wrap = document.createElement('div');
+    wrap.style.display = 'inline-flex';
+    wrap.style.gap = '5px';
+    wrap.style.alignItems = 'center';
+
+    const view = document.createElement('button');
+    view.className = 'chip';
+    view.textContent = doc.fileName || doc.title || 'sample';
+    view.title = 'Click to preview';
+    view.addEventListener('click', () => openPreview(doc.fileName || doc.title || 'sample', doc.content));
+
+    const del = document.createElement('button');
+    del.className = 'chip';
+    del.textContent = 'x';
+    del.title = 'Remove';
+    del.addEventListener('click', () => onRemove(doc.id));
+
+    wrap.appendChild(view);
+    wrap.appendChild(del);
+    return wrap;
+  }
+
+  function renderUploadChips(kind) {
+    const isSuccess = kind === 'SUCCESS_SAMPLE';
+    const docs = isSuccess ? state.successUploads : state.failureUploads;
+    const chips = document.getElementById(isSuccess ? 'successChips' : 'failureChips');
+    chips.innerHTML = '';
+
+    docs.forEach((doc) => {
+      chips.appendChild(createChip(doc, (id) => {
+        if (isSuccess) {
+          state.successUploads = state.successUploads.filter((d) => d.id !== id);
+        } else {
+          state.failureUploads = state.failureUploads.filter((d) => d.id !== id);
+        }
+        renderUploadChips(kind);
+        refreshMetrics();
+      }));
+    });
+  }
+
+  async function addFiles(kind, fileList) {
+    const files = Array.from(fileList || []);
+    for (const f of files) {
+      const text = await f.text();
+      const doc = {
+        id: makeId(),
+        type: kind,
+        title: f.name,
+        content: text,
+        fileName: f.name
+      };
+      if (kind === 'SUCCESS_SAMPLE') {
+        state.successUploads.push(doc);
+      } else {
+        state.failureUploads.push(doc);
+      }
+    }
+    renderUploadChips(kind);
+    refreshMetrics();
+  }
+
+  function bindDropzone(dropzoneId, inputId, kind) {
+    const zone = document.getElementById(dropzoneId);
+    const input = document.getElementById(inputId);
+
+    zone.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      await addFiles(kind, input.files);
+      input.value = '';
+    });
+
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('drag');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+    zone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag');
+      await addFiles(kind, e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : []);
+    });
+  }
+
+  function createSampleRow(typeLabel) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.setAttribute('data-row-id', makeId());
+    row.innerHTML =
+      '<div class="rowTop">' +
+      '  <div class="field"><label>Title</label><input data-k="title" placeholder="' + typeLabel + ' title" /></div>' +
+      '  <div><button class="btnDanger" data-action="remove">Remove</button></div>' +
+      '</div>' +
+      '<div class="field" style="margin-top:8px"><label>File Upload</label><input data-k="file" type="file" /></div>' +
+      '<div class="rowMeta" data-k="fileMeta">No file selected.</div>' +
+      '<div class="field" style="margin-top:8px"><label>Content</label><textarea data-k="content" placeholder="Paste ' + typeLabel + ' payload..."></textarea></div>';
+
+    const removeBtn = row.querySelector('[data-action="remove"]');
+    const fileInput = row.querySelector('input[data-k="file"]');
+    const titleInput = row.querySelector('input[data-k="title"]');
+    const content = row.querySelector('textarea[data-k="content"]');
+    const fileMeta = row.querySelector('[data-k="fileMeta"]');
+
+    removeBtn.addEventListener('click', () => {
+      row.remove();
+      refreshMetrics();
+    });
+
+    titleInput.addEventListener('input', refreshMetrics);
+    content.addEventListener('input', refreshMetrics);
+
+    fileInput.addEventListener('change', async () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) {
+        fileMeta.textContent = 'No file selected.';
+        refreshMetrics();
+        return;
+      }
+      fileMeta.textContent = 'Reading ' + f.name + '...';
+      const text = await f.text();
+      content.value = text;
+      fileMeta.textContent = 'Loaded: ' + f.name + ' (' + f.size + ' bytes)';
+      row.setAttribute('data-file-name', f.name);
+      refreshMetrics();
+    });
+
+    return row;
+  }
+
+  function collectSampleRows(containerId, type) {
+    const container = document.getElementById(containerId);
+    const out = [];
+    container.querySelectorAll('.row[data-row-id]').forEach((rowEl) => {
+      const titleEl = rowEl.querySelector('input[data-k="title"]');
+      const contentEl = rowEl.querySelector('textarea[data-k="content"]');
+      const title = titleEl.value.trim();
+      const content = contentEl.value;
+      const fileName = rowEl.getAttribute('data-file-name') || '';
+      if (!content.trim()) return;
+      out.push({
+        id: rowEl.getAttribute('data-row-id'),
+        type,
+        title: title || fileName || 'untitled',
+        content,
+        fileName
+      });
+    });
+    return out;
+  }
+
+  async function bindSingleFile(inputId, dropzoneId, metaId, textareaId, type) {
+    const input = document.getElementById(inputId);
+    const dropzone = document.getElementById(dropzoneId);
+    const meta = document.getElementById(metaId);
+    const area = document.getElementById(textareaId);
+
+    async function loadFirstFile(fileList) {
+      const f = fileList && fileList[0];
+      if (!f) {
+        meta.textContent = 'No ' + type + ' file selected.';
+        refreshMetrics();
+        return;
+      }
+      meta.textContent = 'Reading ' + f.name + '...';
+      const text = await f.text();
+      area.value = text;
+      area.setAttribute('data-file-name', f.name);
+      meta.textContent = 'Loaded: ' + f.name + ' (' + f.size + ' bytes)';
+      refreshMetrics();
+    }
+
+    input.addEventListener('change', async () => loadFirstFile(input.files));
+
+    dropzone.addEventListener('click', () => input.click());
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag');
+    });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+    dropzone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag');
+      await loadFirstFile(e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : []);
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 1) {
+        meta.textContent = 'Loaded first file only (single file mode).';
+      }
+    });
+
+    area.addEventListener('input', refreshMetrics);
+  }
+
+  function applyModeUi() {
+    const multi = state.multiUpload;
+    document.getElementById('successMultiWrap').classList.toggle('hidden', !multi);
+    document.getElementById('failureMultiWrap').classList.toggle('hidden', !multi);
+    document.getElementById('successRowsWrap').classList.toggle('hidden', multi);
+    document.getElementById('failureRowsWrap').classList.toggle('hidden', multi);
+    document.getElementById('additionalInfoCard').classList.toggle('hidden', multi);
+    refreshMetrics();
+  }
+
+  function refreshMetrics() {
+    const successCount = state.multiUpload
+      ? state.successUploads.length
+      : document.querySelectorAll('#successRows .row[data-row-id]').length;
+    const failureCount = state.multiUpload
+      ? state.failureUploads.length
+      : document.querySelectorAll('#failureRows .row[data-row-id]').length;
+
+    const aid = document.getElementById('aidContent').value.trim();
+    const hld = document.getElementById('hldContent').value.trim();
+    const docs = (aid ? 1 : 0) + (hld ? 1 : 0);
+    const ready = successCount > 0 && docs === 2;
+
+    document.getElementById('metricSuccess').textContent = String(successCount);
+    document.getElementById('metricFailure').textContent = String(failureCount);
+    document.getElementById('metricDocs').textContent = docs + '/2';
+    document.getElementById('metricReady').textContent = ready ? 'Ready' : 'Draft';
+    document.getElementById('validationText').textContent = ready
+      ? 'Ready to start flow execution'
+      : 'Need at least one success sample + AID + HLD';
+  }
+
+  bindDropzone('successDropzone', 'successMultiFile', 'SUCCESS_SAMPLE');
+  bindDropzone('failureDropzone', 'failureMultiFile', 'FAILURE_SAMPLE');
+
+  /* ---- Folder drop logic ---- */
+  (function() {
+    var folderZone = document.getElementById('folderDropzone');
+    var folderChips = document.getElementById('folderChips');
+
+    function readEntryAsFile(entry) {
+      return new Promise(function(resolve) { entry.file(resolve); });
+    }
+    function readDirectory(dirEntry) {
+      return new Promise(function(resolve) {
+        var reader = dirEntry.createReader();
+        var all = [];
+        (function readBatch() {
+          reader.readEntries(function(entries) {
+            if (!entries.length) return resolve(all);
+            all = all.concat(Array.from(entries));
+            readBatch();
+          });
+        })();
+      });
+    }
+    function readAllFiles(dirEntry) {
+      return readDirectory(dirEntry).then(function(entries) {
+        var fileEntries = entries.filter(function(e) { return e.isFile; });
+        return Promise.all(fileEntries.map(function(e) { return readEntryAsFile(e).then(function(f) { return f.text().then(function(t) { return { name: f.name, text: t, size: f.size }; }); }); }));
+      });
+    }
+    function readSubdirFiles(dirEntry, subName) {
+      return readDirectory(dirEntry).then(function(entries) {
+        var sub = entries.find(function(e) { return e.isDirectory && e.name.toLowerCase() === subName; });
+        if (!sub) return Promise.resolve([]);
+        return readAllFiles(sub);
+      });
+    }
+
+    function pickByExt(files, extOrder) {
+      for (var i = 0; i < extOrder.length; i++) {
+        var ext = extOrder[i];
+        var match = files.filter(function(f) { return f.name.toLowerCase().endsWith(ext); });
+        if (match.length > 0) return match;
+      }
+      return files;
+    }
+
+    function addFolderChip(label, count) {
+      var c = document.createElement('span');
+      c.className = 'chip';
+      c.style.pointerEvents = 'none';
+      c.textContent = label + ' (' + count + ')';
+      folderChips.appendChild(c);
+    }
+
+    async function processFolder(rootEntry) {
+      folderChips.innerHTML = '';
+      var entries = await readDirectory(rootEntry);
+      var dirMap = {};
+      entries.forEach(function(e) {
+        if (e.isDirectory) dirMap[e.name.toLowerCase()] = e;
+      });
+      var fileMap = {};
+      entries.forEach(function(e) {
+        if (e.isFile) fileMap[e.name.toLowerCase()] = e;
+      });
+
+      /* AID: folder named 'aid' with csv/xlsx (csv takes precedence), or root csv/xlsx */
+      var aidDir = dirMap['aid'];
+      if (aidDir) {
+        var aidFiles = await readAllFiles(aidDir);
+        var picked = pickByExt(aidFiles, ['.csv', '.xlsx']);
+        if (picked.length > 0) {
+          var af = picked[0];
+          document.getElementById('aidContent').value = af.text;
+          document.getElementById('aidContent').setAttribute('data-file-name', af.name);
+          document.getElementById('aidMeta').textContent = 'Loaded: ' + af.name + ' (' + af.size + ' bytes) [from folder]';
+          addFolderChip('AID', 1);
+        }
+      }
+
+      /* Docs/HLD: folder named 'docs' or 'hld', md/docs (md takes precedence) */
+      var docsDir = dirMap['docs'] || dirMap['hld'];
+      if (docsDir) {
+        var docFiles = await readAllFiles(docsDir);
+        var pickedDoc = pickByExt(docFiles, ['.md', '.doc', '.docx']);
+        if (pickedDoc.length > 0) {
+          var df = pickedDoc[0];
+          document.getElementById('hldContent').value = df.text;
+          document.getElementById('hldContent').setAttribute('data-file-name', df.name);
+          document.getElementById('hldMeta').textContent = 'Loaded: ' + df.name + ' (' + df.size + ' bytes) [from folder]';
+          addFolderChip('Doc', 1);
+        }
+      }
+
+      /* Samples: folder named 'sample' or 'samples' with success/failure subfolders */
+      var samplesDir = dirMap['sample'] || dirMap['samples'];
+      if (samplesDir) {
+        var successFiles = await readSubdirFiles(samplesDir, 'success');
+        var failureFiles = await readSubdirFiles(samplesDir, 'failure');
+
+        for (var si = 0; si < successFiles.length; si++) {
+          var sf = successFiles[si];
+          state.successUploads.push({
+            id: makeId(),
+            type: 'SUCCESS_SAMPLE',
+            title: sf.name,
+            content: sf.text,
+            fileName: sf.name
+          });
+        }
+        for (var fi = 0; fi < failureFiles.length; fi++) {
+          var ff = failureFiles[fi];
+          state.failureUploads.push({
+            id: makeId(),
+            type: 'FAILURE_SAMPLE',
+            title: ff.name,
+            content: ff.text,
+            fileName: ff.name
+          });
+        }
+        renderUploadChips('SUCCESS_SAMPLE');
+        renderUploadChips('FAILURE_SAMPLE');
+        if (successFiles.length) addFolderChip('Success', successFiles.length);
+        if (failureFiles.length) addFolderChip('Failure', failureFiles.length);
+      }
+
+      refreshMetrics();
+    }
+
+    folderZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      folderZone.classList.add('drag');
+    });
+    folderZone.addEventListener('dragleave', function() { folderZone.classList.remove('drag'); });
+    folderZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      folderZone.classList.remove('drag');
+      var items = e.dataTransfer && e.dataTransfer.items;
+      if (!items || !items.length) return;
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+        if (entry && entry.isDirectory) {
+          processFolder(entry);
+          return;
+        }
+      }
+      folderZone.textContent = 'Please drop a folder, not files.';
+      setTimeout(function() { folderZone.textContent = 'Drop folder here \u2014 auto-detects aid, docs/hld, samples (success/failure)'; }, 2500);
+    });
+  })();
+
+  document.getElementById('addSuccessBtn').addEventListener('click', () => {
+    document.getElementById('successRows').appendChild(createSampleRow('success sample'));
+    refreshMetrics();
+  });
+  document.getElementById('addFailureBtn').addEventListener('click', () => {
+    document.getElementById('failureRows').appendChild(createSampleRow('failure sample'));
+    refreshMetrics();
+  });
+
+  bindSingleFile('aidFile', 'aidDropzone', 'aidMeta', 'aidContent', 'AID');
+  bindSingleFile('hldFile', 'hldDropzone', 'hldMeta', 'hldContent', 'HLD');
+
+  document.getElementById('multiToggle').addEventListener('change', (e) => {
+    state.multiUpload = !!e.target.checked;
+    applyModeUi();
+  });
+
+  document.getElementById('previewBack').addEventListener('click', (e) => {
+    if (e.target.id === 'previewBack') closePreview();
+  });
+
+  document.getElementById('cancelBtn').addEventListener('click', () => vscode.postMessage({ type: 'cancel' }));
+  document.getElementById('fakeBtn').addEventListener('click', () => vscode.postMessage({ type: 'fake' }));
+
+  document.getElementById('startBtn').addEventListener('click', () => {
+    const runName = document.getElementById('runName').value.trim() || 'flowtest-run';
+    const outputPath = String(document.getElementById('outputPath').value || '').trim();
+
+    const successSamples = state.multiUpload
+      ? state.successUploads.slice()
+      : collectSampleRows('successRows', 'SUCCESS_SAMPLE');
+
+    const failureSamples = state.multiUpload
+      ? state.failureUploads.slice()
+      : collectSampleRows('failureRows', 'FAILURE_SAMPLE');
+
+    const aidContent = document.getElementById('aidContent').value;
+    const hldContent = document.getElementById('hldContent').value;
+    const aidFileName = document.getElementById('aidContent').getAttribute('data-file-name') || '';
+    const hldFileName = document.getElementById('hldContent').getAttribute('data-file-name') || '';
+
+    const aid = aidContent.trim()
+      ? { id: 'aid_1', type: 'AID', title: aidFileName || 'aid', content: aidContent, fileName: aidFileName }
+      : null;
+
+    const hld = hldContent.trim()
+      ? { id: 'hld_1', type: 'HLD', title: hldFileName || 'hld', content: hldContent, fileName: hldFileName }
+      : null;
+
+    const additionalInfo = String(document.getElementById('additionalInfo').value || '').trim();
+
+    if (!aid || !hld || successSamples.length === 0) {
+      alert('Please provide AID, HLD, and at least one success sample.');
+      return;
+    }
+
+    vscode.postMessage({
+      type: 'submit',
+      payload: {
+        runName,
+        outputPath,
+        successSamples,
+        failureSamples,
+        aid,
+        hld,
+        additionalInfo,
+        multiUpload: state.multiUpload
+      }
+    });
+  });
+
+  document.getElementById('successRows').appendChild(createSampleRow('success sample'));
+  document.getElementById('failureRows').appendChild(createSampleRow('failure sample'));
+  applyModeUi();
+</script>
+</body>
+</html>
