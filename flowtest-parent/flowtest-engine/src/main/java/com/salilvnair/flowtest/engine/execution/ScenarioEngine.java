@@ -9,6 +9,7 @@ import com.salilvnair.flowtest.engine.events.ExecutionEventPublisher;
 import com.salilvnair.flowtest.engine.events.ExecutionEventType;
 import com.salilvnair.flowtest.engine.step.StepDispatcher;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,10 +24,14 @@ import java.util.stream.Collectors;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.request;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class ScenarioEngine {
 
@@ -50,6 +55,12 @@ public class ScenarioEngine {
         ScenarioRunResult result = new ScenarioRunResult();
         result.setScenarioId(scenario.getScenarioId());
         result.setScenarioName(scenario.getName());
+        result.setInputMocksCount(scenario.getMocks() == null ? 0 : scenario.getMocks().size());
+        result.setInlineMockStepCount(scenario.getSteps() == null
+                ? 0L
+                : scenario.getSteps().stream()
+                .filter(step -> step != null && step.getRequest() != null && step.getRequest().get("_flowtestMockResponse") != null)
+                .count());
         result.setAllure(buildAllureRunMetadata());
 
         WireMockServer wireMockServer = null;
@@ -194,8 +205,16 @@ public class ScenarioEngine {
                 continue;
             }
             String method = String.valueOf(reqMap.getOrDefault("method", "GET")).toUpperCase();
-            String rawUrl = String.valueOf(reqMap.getOrDefault("url", "/"));
-            String path = normalizePath(rawUrl);
+            String url = firstNonBlank(
+                    reqMap.get("url"),
+                    reqMap.get("urlPath"),
+                    reqMap.get("urlPattern"),
+                    reqMap.get("urlPathPattern")
+            );
+            if (url == null) {
+                url = "/";
+            }
+            String normalizedUrl = normalizePath(url);
 
             Map<String, Object> resMap = asMap(mock.get("response"));
             int status = parseStatus(resMap == null ? mock.get("status") : resMap.get("status"));
@@ -217,16 +236,30 @@ public class ScenarioEngine {
                 }
             }
 
-            server.stubFor(request(method, urlEqualTo(path)).willReturn(responseBuilder));
+            if (reqMap.get("urlPathPattern") != null) {
+                server.stubFor(request(method, urlPathMatching(normalizedUrl)).willReturn(responseBuilder));
+            } else if (reqMap.get("urlPattern") != null) {
+                server.stubFor(request(method, urlMatching(normalizedUrl)).willReturn(responseBuilder));
+            } else if (reqMap.get("urlPath") != null) {
+                server.stubFor(request(method, urlPathEqualTo(normalizedUrl)).willReturn(responseBuilder));
+            } else {
+                server.stubFor(request(method, urlEqualTo(normalizedUrl)).willReturn(responseBuilder));
+            }
             stubCount++;
         }
 
         if (stubCount == 0) {
+            log.info("flowtest-wiremock bootstrap=no-stubs scenarioId={} apiSteps={} scenarioMocks={}",
+                    scenario.getScenarioId(),
+                    apiSteps.size(),
+                    scenarioMocks.size());
             server.stop();
             return WireMockRunMetadata.builder().enabled(false).stubCount(0).build();
         }
 
         this.activeWireMock = server;
+        log.info("flowtest-wiremock bootstrap=enabled scenarioId={} stubCount={} port={}",
+                scenario.getScenarioId(), stubCount, server.port());
         return WireMockRunMetadata.builder()
                 .enabled(true)
                 .baseUrl("http://localhost:" + server.port())
@@ -291,6 +324,18 @@ public class ScenarioEngine {
         return url;
     }
 
+    private String firstNonBlank(Object... values) {
+        if (values == null) return null;
+        for (Object value : values) {
+            if (value == null) continue;
+            String s = String.valueOf(value).trim();
+            if (!s.isBlank() && !"null".equalsIgnoreCase(s)) {
+                return s;
+            }
+        }
+        return null;
+    }
+
     private int parseStatus(Object value) {
         if (value == null) return 200;
         try {
@@ -321,6 +366,12 @@ public class ScenarioEngine {
                 ? List.of()
                 : scenario.getSteps().stream().map(ScenarioStep::getId).collect(Collectors.toList()));
         payload.put("dataKeys", scenario.getData() == null ? List.of() : scenario.getData().keySet());
+        payload.put("inputMocksCount", scenario.getMocks() == null ? 0 : scenario.getMocks().size());
+        payload.put("inlineMockStepCount", scenario.getSteps() == null
+                ? 0
+                : scenario.getSteps().stream()
+                .filter(step -> step != null && step.getRequest() != null && step.getRequest().get("_flowtestMockResponse") != null)
+                .count());
         payload.put("allureResultsDirectory", resultDirAbsolute());
         payload.put("wireMockEnabled", wireMockMeta != null && wireMockMeta.isEnabled());
         payload.put("wireMockBaseUrl", wireMockMeta == null ? "" : wireMockMeta.getBaseUrl());

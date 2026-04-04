@@ -119,6 +119,83 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
+function extractJsonValue(text: string): unknown | null {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+
+  const fence = raw.match(/```json\s*([\s\S]*?)```/i);
+  const candidate = fence ? fence[1].trim() : raw;
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    // ignore
+  }
+
+  const firstObj = raw.indexOf("{");
+  const lastObj = raw.lastIndexOf("}");
+  if (firstObj >= 0 && lastObj > firstObj) {
+    try {
+      return JSON.parse(raw.slice(firstObj, lastObj + 1));
+    } catch {
+      // ignore
+    }
+  }
+
+  const firstArr = raw.indexOf("[");
+  const lastArr = raw.lastIndexOf("]");
+  if (firstArr >= 0 && lastArr > firstArr) {
+    try {
+      return JSON.parse(raw.slice(firstArr, lastArr + 1));
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> {
+  const asObject = (v: unknown): Record<string, unknown> | null =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+  const one = (raw: unknown): Record<string, unknown> | null => {
+    const obj = asObject(raw);
+    if (!obj) return null;
+    const request = asObject(obj.request);
+    const response = asObject(obj.response);
+    if (!request || !response) return null;
+    const method = String((request as any).method ?? "").trim();
+    const url = String((request as any).url ?? "").trim();
+    if (!method || !url) return null;
+    return { request, response };
+  };
+
+  const out: Array<Record<string, unknown>> = [];
+  const pushAll = (arr: unknown[]) => {
+    for (const item of arr) {
+      const m = one(item);
+      if (m) out.push(m);
+    }
+  };
+
+  if (Array.isArray(value)) {
+    pushAll(value);
+    return out;
+  }
+
+  const obj = asObject(value);
+  if (!obj) return out;
+
+  if (Array.isArray((obj as any).mocks)) {
+    pushAll((obj as any).mocks as unknown[]);
+  } else if (Array.isArray((obj as any).mappings)) {
+    pushAll((obj as any).mappings as unknown[]);
+  } else {
+    const m = one(obj);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
 function toSlug(raw: string): string {
   return (raw || "generated-scenario")
     .toLowerCase()
@@ -998,6 +1075,24 @@ async function handleStartCommand(
     return resultWithFollowups(defaultFollowups());
   }
   pushVerbose("SCENARIO_DSL", "json_parse_ok");
+
+  const inferredMocks = normalizeWiremockMocks(extractJsonValue(mocksOutput));
+  if (inferredMocks.length > 0) {
+    if (Array.isArray((scenarioObj as any).scenarios)) {
+      for (const sc of (scenarioObj as any).scenarios as Array<unknown>) {
+        if (!sc || typeof sc !== "object") continue;
+        const s = sc as Record<string, unknown>;
+        if (!Array.isArray((s as any).mocks) || (s as any).mocks.length === 0) {
+          s.mocks = inferredMocks;
+        }
+      }
+    } else if (!Array.isArray((scenarioObj as any).mocks) || (scenarioObj as any).mocks.length === 0) {
+      (scenarioObj as any).mocks = inferredMocks;
+    }
+    pushVerbose("WIREMOCK", "mocks_attached_to_scenario", `attached=${inferredMocks.length}`);
+  } else {
+    pushVerbose("WIREMOCK", "mocks_parse_empty");
+  }
 
   const normalizedSet = normalizeScenariosForEngine(scenarioObj);
   const normalizedScenarios: Record<string, unknown>[] = [];

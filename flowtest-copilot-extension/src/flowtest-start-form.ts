@@ -538,6 +538,12 @@ function getHtml(n: string): string {
   </div>
 
   <div class="card">
+    <div class="title"><span class="badge info">Folder</span>Samples, Doc, AID</div>
+    <div class="dropzone" id="folderDropzone">Drop folder here — auto-detects aid, docs/hld, samples (success/failure)</div>
+    <div class="chips" id="folderChips"></div>
+  </div>
+
+  <div class="card">
     <div class="title"><span class="badge ok">Success</span>Success Samples</div>
 
     <div id="successMultiWrap">
@@ -878,6 +884,155 @@ function getHtml(n: string): string {
 
   bindDropzone('successDropzone', 'successMultiFile', 'SUCCESS_SAMPLE');
   bindDropzone('failureDropzone', 'failureMultiFile', 'FAILURE_SAMPLE');
+
+  /* ---- Folder drop logic ---- */
+  (function() {
+    var folderZone = document.getElementById('folderDropzone');
+    var folderChips = document.getElementById('folderChips');
+
+    function readEntryAsFile(entry) {
+      return new Promise(function(resolve) { entry.file(resolve); });
+    }
+    function readDirectory(dirEntry) {
+      return new Promise(function(resolve) {
+        var reader = dirEntry.createReader();
+        var all = [];
+        (function readBatch() {
+          reader.readEntries(function(entries) {
+            if (!entries.length) return resolve(all);
+            all = all.concat(Array.from(entries));
+            readBatch();
+          });
+        })();
+      });
+    }
+    function readAllFiles(dirEntry) {
+      return readDirectory(dirEntry).then(function(entries) {
+        var fileEntries = entries.filter(function(e) { return e.isFile; });
+        return Promise.all(fileEntries.map(function(e) { return readEntryAsFile(e).then(function(f) { return f.text().then(function(t) { return { name: f.name, text: t, size: f.size }; }); }); }));
+      });
+    }
+    function readSubdirFiles(dirEntry, subName) {
+      return readDirectory(dirEntry).then(function(entries) {
+        var sub = entries.find(function(e) { return e.isDirectory && e.name.toLowerCase() === subName; });
+        if (!sub) return Promise.resolve([]);
+        return readAllFiles(sub);
+      });
+    }
+
+    function pickByExt(files, extOrder) {
+      for (var i = 0; i < extOrder.length; i++) {
+        var ext = extOrder[i];
+        var match = files.filter(function(f) { return f.name.toLowerCase().endsWith(ext); });
+        if (match.length > 0) return match;
+      }
+      return files;
+    }
+
+    function addFolderChip(label, count) {
+      var c = document.createElement('span');
+      c.className = 'chip';
+      c.style.pointerEvents = 'none';
+      c.textContent = label + ' (' + count + ')';
+      folderChips.appendChild(c);
+    }
+
+    async function processFolder(rootEntry) {
+      folderChips.innerHTML = '';
+      var entries = await readDirectory(rootEntry);
+      var dirMap = {};
+      entries.forEach(function(e) {
+        if (e.isDirectory) dirMap[e.name.toLowerCase()] = e;
+      });
+      var fileMap = {};
+      entries.forEach(function(e) {
+        if (e.isFile) fileMap[e.name.toLowerCase()] = e;
+      });
+
+      /* AID: folder named 'aid' with csv/xlsx (csv takes precedence), or root csv/xlsx */
+      var aidDir = dirMap['aid'];
+      if (aidDir) {
+        var aidFiles = await readAllFiles(aidDir);
+        var picked = pickByExt(aidFiles, ['.csv', '.xlsx']);
+        if (picked.length > 0) {
+          var af = picked[0];
+          document.getElementById('aidContent').value = af.text;
+          document.getElementById('aidContent').setAttribute('data-file-name', af.name);
+          document.getElementById('aidMeta').textContent = 'Loaded: ' + af.name + ' (' + af.size + ' bytes) [from folder]';
+          addFolderChip('AID', 1);
+        }
+      }
+
+      /* Docs/HLD: folder named 'docs' or 'hld', md/docs (md takes precedence) */
+      var docsDir = dirMap['docs'] || dirMap['hld'];
+      if (docsDir) {
+        var docFiles = await readAllFiles(docsDir);
+        var pickedDoc = pickByExt(docFiles, ['.md', '.doc', '.docx']);
+        if (pickedDoc.length > 0) {
+          var df = pickedDoc[0];
+          document.getElementById('hldContent').value = df.text;
+          document.getElementById('hldContent').setAttribute('data-file-name', df.name);
+          document.getElementById('hldMeta').textContent = 'Loaded: ' + df.name + ' (' + df.size + ' bytes) [from folder]';
+          addFolderChip('Doc', 1);
+        }
+      }
+
+      /* Samples: folder named 'sample' or 'samples' with success/failure subfolders */
+      var samplesDir = dirMap['sample'] || dirMap['samples'];
+      if (samplesDir) {
+        var successFiles = await readSubdirFiles(samplesDir, 'success');
+        var failureFiles = await readSubdirFiles(samplesDir, 'failure');
+
+        for (var si = 0; si < successFiles.length; si++) {
+          var sf = successFiles[si];
+          state.successUploads.push({
+            id: makeId(),
+            type: 'SUCCESS_SAMPLE',
+            title: sf.name,
+            content: sf.text,
+            fileName: sf.name
+          });
+        }
+        for (var fi = 0; fi < failureFiles.length; fi++) {
+          var ff = failureFiles[fi];
+          state.failureUploads.push({
+            id: makeId(),
+            type: 'FAILURE_SAMPLE',
+            title: ff.name,
+            content: ff.text,
+            fileName: ff.name
+          });
+        }
+        renderUploadChips('SUCCESS_SAMPLE');
+        renderUploadChips('FAILURE_SAMPLE');
+        if (successFiles.length) addFolderChip('Success', successFiles.length);
+        if (failureFiles.length) addFolderChip('Failure', failureFiles.length);
+      }
+
+      refreshMetrics();
+    }
+
+    folderZone.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      folderZone.classList.add('drag');
+    });
+    folderZone.addEventListener('dragleave', function() { folderZone.classList.remove('drag'); });
+    folderZone.addEventListener('drop', function(e) {
+      e.preventDefault();
+      folderZone.classList.remove('drag');
+      var items = e.dataTransfer && e.dataTransfer.items;
+      if (!items || !items.length) return;
+      for (var i = 0; i < items.length; i++) {
+        var entry = items[i].webkitGetAsEntry && items[i].webkitGetAsEntry();
+        if (entry && entry.isDirectory) {
+          processFolder(entry);
+          return;
+        }
+      }
+      folderZone.textContent = 'Please drop a folder, not files.';
+      setTimeout(function() { folderZone.textContent = 'Drop folder here \u2014 auto-detects aid, docs/hld, samples (success/failure)'; }, 2500);
+    });
+  })();
 
   document.getElementById('addSuccessBtn').addEventListener('click', () => {
     document.getElementById('successRows').appendChild(createSampleRow('success sample'));

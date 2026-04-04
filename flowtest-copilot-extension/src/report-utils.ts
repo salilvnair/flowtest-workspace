@@ -70,11 +70,18 @@ export async function generateAndOpenAllureReport(): Promise<{
     };
   }
 
-  /* Open the report HTML directly in the browser — avoids blocking on `allure open` server */
-  await vscode.env.openExternal(vscode.Uri.file(reportIndex));
+  /* Spawn `allure open` detached so it starts an HTTP server without blocking */
+  const openProc = childProcess.spawn("allure", ["open", reportDir], {
+    cwd: root,
+    detached: true,
+    stdio: "ignore",
+    shell: false
+  });
+  openProc.unref();
+
   return {
     ok: true,
-    message: `Allure report opened: ${reportIndex}`,
+    message: `Allure report served: ${reportDir}`,
     reportPath: reportIndex,
     logs: gen.stdout
   };

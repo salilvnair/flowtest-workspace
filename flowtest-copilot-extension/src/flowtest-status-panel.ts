@@ -1724,14 +1724,14 @@ export class FlowtestStatusPanel {
           + expandBtnHtml + '</span></div>'
           + (hasBody ? '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + metaHtml + actionsHtml + '</div>' : '') + '</div>';
         timeline.appendChild(row);
-        /* Timer logic — LLM + Java: start on in_progress/running, stop on completed */
+        /* Timer logic — LLM + Java: start on FIRST running event, stop on completed */
         var tKey = stageKey(ev);
         var tPill = row.querySelector('.timerPill');
         var st = String(ev.status || '').toLowerCase();
         var isTimerStage = cm.cls === 'llm' || cm.cls === 'java';
         var isStart = st === 'in_progress' || st === 'running';
         var isEnd = st === 'completed' || st === 'success' || st === 'done';
-        if (isTimerStage && isStart) {
+        if (isTimerStage && isStart && !aiTimers.has(tKey)) {
           if (tPill) startTimer(tKey, tPill);
         } else if (isTimerStage && isEnd) {
           var finalTime = stopTimer(tKey);

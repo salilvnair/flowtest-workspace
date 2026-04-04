@@ -11,6 +11,8 @@ public class ScenarioRunResult {
     private String scenarioName;
     private boolean success;
     private String failureStepId;
+    private int inputMocksCount;
+    private long inlineMockStepCount;
     private AllureRunMetadata allure;
     private WireMockRunMetadata wireMock;
     private List<StepRunResult> steps = new ArrayList<>();
