@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as childProcess from "child_process";
 import * as fs from "fs";
+import * as fsp from "fs/promises";
 import * as path from "path";
 
 let preferredAllureResultsDir: string | null = null;
@@ -28,6 +29,45 @@ function runCommand(command: string, args: string[], cwd: string): Promise<{ cod
   });
 }
 
+async function stopExistingAllureServe(root: string): Promise<void> {
+  if (process.platform === "win32") {
+    return;
+  }
+  // best-effort: stop previously detached "allure open"/"allure serve" processes
+  await runCommand("pkill", ["-f", "allure open"], root);
+  await runCommand("pkill", ["-f", "allure serve"], root);
+}
+
+export async function prepareAllureForFreshRun(): Promise<{ ok: boolean; message: string; cleanedResultsDir?: string }> {
+  const root = workspaceRoot();
+  await stopExistingAllureServe(root);
+
+  const candidateResults = [
+    preferredAllureResultsDir,
+    path.join(root, "allure-results"),
+    path.join(root, "flowtest-parent", "allure-results")
+  ].filter(Boolean) as string[];
+  const resultsDir = candidateResults.find((p) => fs.existsSync(p));
+  if (!resultsDir) {
+    return { ok: true, message: "No existing allure-results directory found to clean." };
+  }
+
+  try {
+    const entries = await fsp.readdir(resultsDir, { withFileTypes: true });
+    await Promise.all(entries.map((entry) => {
+      const full = path.join(resultsDir, entry.name);
+      return fsp.rm(full, { recursive: true, force: true });
+    }));
+    return { ok: true, message: `Cleaned allure-results: ${resultsDir}`, cleanedResultsDir: resultsDir };
+  } catch (error: any) {
+    return {
+      ok: false,
+      message: `Failed to clean allure-results: ${error?.message ?? String(error)}`,
+      cleanedResultsDir: resultsDir
+    };
+  }
+}
+
 export async function generateAndOpenAllureReport(): Promise<{
   ok: boolean;
   message: string;
@@ -53,6 +93,7 @@ export async function generateAndOpenAllureReport(): Promise<{
     ? preferredAllureReportDir.trim()
     : path.join(path.dirname(resultsDir), "allure-report");
   const reportIndex = path.join(reportDir, "index.html");
+  await stopExistingAllureServe(root);
   const gen = await runCommand("allure", ["generate", resultsDir, "-o", reportDir, "--clean"], root);
   if (gen.code !== 0) {
     return {

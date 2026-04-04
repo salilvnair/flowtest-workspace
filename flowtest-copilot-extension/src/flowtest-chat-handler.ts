@@ -5,7 +5,7 @@ import { openScenarioForm } from "./flowtest-scenario-form";
 import { openMocksForm } from "./flowtest-mocks-form";
 import { openVisionForm } from "./flowtest-vision-form";
 import { openStartIntakeForm, StartIntakePayload, IntakeDoc } from "./flowtest-start-form";
-import { generateAndOpenAllureReport, setPreferredAllurePaths } from "./report-utils";
+import { generateAndOpenAllureReport, prepareAllureForFreshRun, setPreferredAllurePaths } from "./report-utils";
 import { FlowtestStatusPanel } from "./flowtest-status-panel";
 import { createFakeRunFixture } from "./faker";
 import { randomUUID } from "crypto";
@@ -793,6 +793,9 @@ async function handleStartCommand(
     "received",
     `docs=${intakeToDocs(intake).length} | intake_mode=${intake.multiUpload ? "multi_upload" : "row_mode"} | output_path=${plannedOutputBasePath ?? "pending"}`
   );
+
+  const allurePrep = await prepareAllureForFreshRun();
+  pushVerbose("ALLURE", allurePrep.ok ? "prep_completed" : "prep_failed", allurePrep.message);
 
   stream.markdown([
     "## FlowTest Start Audit",
