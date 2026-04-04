@@ -131,7 +131,7 @@ export function createFakeRunFixture(): FakeRunFixture {
       {
         time: "10:00:01",
         stage: "UI",
-        status: "running",
+        status: "success",
         title: "Status Panel Initialized",
         detail: "Fake run bootstrapped for UI regression.",
         meta: { editor: "VS Code", extension: "flowtest-copilot", version: "0.0.1" }

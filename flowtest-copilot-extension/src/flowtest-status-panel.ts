@@ -651,8 +651,16 @@ export class FlowtestStatusPanel {
     .actionBtn.ai { color: #c0c6ff; border-color: color-mix(in srgb, #c0c6ff 50%, var(--border)); background: color-mix(in srgb, #c0c6ff 16%, transparent); }
     .actionBtn.file { color: #9be7ff; border-color: color-mix(in srgb, #9be7ff 50%, var(--border)); background: color-mix(in srgb, #9be7ff 16%, transparent); }
     .actionBtn.engine { color: #ffb3a5; border-color: color-mix(in srgb, #ffb3a5 50%, var(--border)); background: color-mix(in srgb, #ffb3a5 16%, transparent); }
-    .summary { padding: 9px 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-    .summary b { color: var(--fg); }
+    .summary { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); position: relative; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--card) 60%, #0d1117), #0d1117); letter-spacing: 0.15px; line-height: 1.5; }
+    .summary b { color: var(--fg); font-weight: 700; }
+    .summary .summaryDetail { color: color-mix(in srgb, var(--fg) 70%, var(--muted)); font-style: italic; }
+    .summary.thinking { background: linear-gradient(180deg, color-mix(in srgb, var(--info) 8%, var(--card)), #0d1117); }
+    .summary.thinking .summaryProgress { display: inline; color: #b0c4de; font-weight: 600; }
+    .summary.thinking::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 25%, rgba(140,180,255,0.06) 38%, rgba(180,210,255,0.14) 50%, rgba(140,180,255,0.06) 62%, transparent 75%); animation: glossySweep 2s ease-in-out infinite; pointer-events: none; }
+    @keyframes glossySweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+    .summary.done { background: linear-gradient(180deg, color-mix(in srgb, #9ef0b7 6%, var(--card)), #0d1117); }
+    .summary.done .summaryStatus { color: #9ef0b7; font-weight: 700; }
+    .lastRowLabel { font-size: 10px; color: color-mix(in srgb, var(--muted) 72%, transparent); max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
     .stateComplete { color: #9ef0b7; }
     .stateFail { color: #ff9db7; }
     .modal {
@@ -792,7 +800,7 @@ export class FlowtestStatusPanel {
       padding: 2px 0;
     }
     /* --- view panels --- */
-    .viewPanel { display: none; flex: 1 1 auto; min-height: 0; overflow: hidden; background: #0d1117; }
+    .viewPanel { display: none; flex: 1 1 auto; min-height: 0; overflow: auto; background: #0d1117; }
     .viewPanel.active { display: flex; flex-direction: column; }
     /* --- Pretty view with line numbers --- */
     .prettyWrap { display: flex; flex: 1 1 auto; min-height: 0; overflow: auto; max-width: 100%; background: #0d1117; }
@@ -830,7 +838,7 @@ export class FlowtestStatusPanel {
       width: 100%;
       border-radius: 0;
       border: none;
-      overflow: hidden;
+      overflow: visible;
       background: #0d1117;
       flex: 1 1 auto;
     }
@@ -930,7 +938,8 @@ export class FlowtestStatusPanel {
       <div class="sectionHead">
         <div class="sectionHeadLeft">Live Timeline <button id="timelineCollapseBtn" class="collapseBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></div>
         <div class="sectionHeadRight">
-          <span id="fakeTimelineBtn" class="testBtn">Fake timeline</span>
+          <span id="lastRowLabel" class="lastRowLabel"></span>
+          <button id="fakeRunBtn" class="testBtn" type="button" style="font-size:9px;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid var(--border);background:color-mix(in srgb, var(--card) 84%, transparent);color:var(--muted);">Fake</button>
           <label class="followToggle"><input id="followLogs" type="checkbox" checked /> Follow logs</label>
         </div>
       </div>
@@ -1074,6 +1083,31 @@ export class FlowtestStatusPanel {
       let modalName = 'detail';
       let modalText = '';
       let modalLang = 'text';
+
+      /* --- Timer helpers --- */
+      var aiTimers = new Map();
+      function mmss(sec) { var m = Math.floor(sec / 60); var s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+      function stageKey(ev) { return (ev.stage || ''); }
+      function startTimer(key, node) {
+        if (aiTimers.has(key)) stopTimer(key);
+        var start = Date.now();
+        var pill = node;
+        pill.classList.remove('hidden', 'done');
+        var dot = pill.querySelector('.timerDot');
+        var lbl = pill.querySelector('.timerLbl');
+        function tick() { var sec = Math.round((Date.now() - start) / 1000); if (lbl) lbl.textContent = mmss(sec); }
+        tick();
+        var iv = setInterval(tick, 1000);
+        aiTimers.set(key, { iv: iv, pill: pill });
+      }
+      function stopTimer(key) {
+        var entry = aiTimers.get(key);
+        if (!entry) return;
+        clearInterval(entry.iv);
+        entry.pill.classList.add('done');
+        aiTimers.delete(key);
+      }
+      var lastRowLabel = document.getElementById('lastRowLabel');
       const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-' };
 
       function syncChevronState(btn, isCollapsed) {
@@ -1169,7 +1203,24 @@ export class FlowtestStatusPanel {
         }
       }
       function setSummary(status, detail) {
-        if (summary) summary.innerHTML = '<b>Status:</b> ' + (status || '-') + (detail ? (' — ' + detail) : '');
+        if (summary) {
+          var sl = String(status || '').toLowerCase();
+          var isDone = sl.includes('complete') || sl.includes('success');
+          var isFail = sl.includes('fail') || sl.includes('error');
+          var isThinking = !isDone && !isFail && sl !== '-' && sl !== 'cancelled';
+          if (isThinking) {
+            var progressText = detail ? String(detail) : String(status || 'Working...');
+            if (!progressText.endsWith('...')) progressText += '...';
+            summary.innerHTML = '<span class="summaryProgress">' + esc(progressText) + '</span>';
+          } else if (isDone) {
+            summary.innerHTML = '<span class="summaryStatus">' + esc(String(status || 'Completed')) + '</span>' + (detail ? ' <span class="summaryDetail"> — ' + esc(detail) + '</span>' : '');
+          } else {
+            summary.innerHTML = '<b>' + esc(String(status || '-')) + '</b>' + (detail ? ' <span class="summaryDetail"> — ' + esc(detail) + '</span>' : '');
+          }
+          summary.classList.remove('thinking', 'done');
+          if (isThinking) summary.classList.add('thinking');
+          if (isDone) summary.classList.add('done');
+        }
         if (runState) runState.textContent = String(status || 'Running');
         const s = String(status || '').toLowerCase();
         if (runMetaDockWrap) {
@@ -1178,6 +1229,26 @@ export class FlowtestStatusPanel {
           if (!done) runMetaDockWrap.classList.remove('collapsed');
           if (runMetaDockLauncher) runMetaDockLauncher.classList.toggle('show', done && runMetaDockWrap.classList.contains('collapsed'));
         }
+        /* Stop all running timers on terminal status */
+        if (s.includes('complete') || s.includes('success') || s.includes('fail') || s.includes('error')) {
+          aiTimers.forEach(function(v, k) { clearInterval(v.iv); v.pill.classList.add('done'); });
+          aiTimers.clear();
+        }
+      }
+      function stripMarkdownFences(input) {
+        var s = String(input || '');
+        var t = s.trim();
+        var BT = String.fromCharCode(96);
+        var fence3 = BT + BT + BT;
+        if (t.indexOf(fence3) !== 0) return s;
+        var firstNL = t.indexOf(String.fromCharCode(10));
+        if (firstNL === -1) return s;
+        var body = t.substring(firstNL + 1);
+        if (body.trimEnd().endsWith(fence3)) {
+          body = body.trimEnd();
+          body = body.substring(0, body.length - 3).trimEnd();
+        }
+        return body;
       }
       function detectLang(content, hint) {
         const h = String(hint || '').toLowerCase().trim();
@@ -1515,7 +1586,7 @@ export class FlowtestStatusPanel {
 
       function renderModalContent(content, title) {
         const source = decodeEscapedJsonIfNeeded(content);
-        const text = String(source || '');
+        const text = stripMarkdownFences(String(source || ''));
         modalLang = detectLang(text, title);
         parsedJson = null;
 
@@ -1613,17 +1684,104 @@ export class FlowtestStatusPanel {
             metaHtml = '<table class="metaTable"><thead><tr><th>Key</th><th>Value</th></tr></thead><tbody>' + metaRows.join('') + '</tbody></table>';
           }
         }
+        var hasBody = !!(ev.detail || metaHtml || actionsHtml);
+        var expandBtnHtml = hasBody ? '<button class="expandBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>' : '';
         row.innerHTML =
           '<span class="dot"></span><div>'
           + '<div class="rowTop"><span class="time">' + esc(ev.time || '') + '</span>'
           + '<span class="stageTag ' + sc + '">' + esc(ev.stage || '') + '</span>'
           + '<span class="statusPill ' + sm.cls + '">' + sm.text + '</span>'
           + '<span class="controlChip ' + cm.cls + '">' + cm.text + '</span>'
+          + '<span class="timerPill hidden" id="tp_' + detailId + '"><span class="timerDot"></span><span class="timerLbl">00:00</span></span>'
           + '<span class="titleWrap"><span class="title">' + esc(ev.title || '') + '</span>'
-          + '<button class="expandBtn" type="button"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button></span></div>'
-          + '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + metaHtml + actionsHtml + '</div></div>';
+          + expandBtnHtml + '</span></div>'
+          + (hasBody ? '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + metaHtml + actionsHtml + '</div>' : '') + '</div>';
         timeline.appendChild(row);
+        /* Timer logic — only for LLM dispatched→received and Java started→completed */
+        var tKey = stageKey(ev);
+        var tPill = row.querySelector('.timerPill');
+        var evTitle = String(ev.title || '').toLowerCase();
+        var st = String(ev.status || '').toLowerCase();
+        var isLlmStart = cm.cls === 'llm' && (evTitle.includes('dispatch') || evTitle.includes('request'));
+        var isJavaStart = cm.cls === 'java' && (st === 'in_progress' || st === 'running' || evTitle.includes('start') || evTitle.includes('executing'));
+        var isTimerStart = isLlmStart || isJavaStart;
+        if (isTimerStart && (st === 'in_progress' || st === 'running')) {
+          if (tPill) startTimer(tKey, tPill);
+        } else if (cm.cls === 'llm' || cm.cls === 'java') {
+          stopTimer(tKey);
+          if (tPill && (st === 'completed' || st === 'success' || st === 'done')) { tPill.classList.remove('hidden'); tPill.classList.add('done'); }
+        }
+        /* Update lastRowLabel */
+        if (lastRowLabel) { lastRowLabel.textContent = ev.title || ev.stage || ''; }
         if (followLogs && followLogs.checked) timeline.scrollTop = timeline.scrollHeight;
+      }
+
+      /* ---------- Inline fake run for testing ---------- */
+      (function() {
+        var fakeBtn = document.getElementById('fakeRunBtn');
+        if (!fakeBtn) return;
+        fakeBtn.addEventListener('click', function() {
+          fakeBtn.disabled = true;
+          fakeBtn.textContent = 'Running...';
+          runFakeTimeline().then(function() {
+            fakeBtn.disabled = false;
+            fakeBtn.textContent = 'Fake';
+          });
+        });
+      })();
+      function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+      async function runFakeTimeline() {
+        /* Clear timeline */
+        if (timeline) timeline.innerHTML = '';
+        aiTimers.forEach(function(v, k) { clearInterval(v.iv); });
+        aiTimers.clear();
+        if (summary) { summary.innerHTML = '<b>Status:</b> Running...'; summary.classList.add('thinking'); }
+
+        /* Large JSON fixture */
+        var bigSpec = {
+          openapi: '3.0.3',
+          info: { title: 'FlowTest Generated Service', version: '2.1.0', description: 'Auto-generated OpenAPI spec for the FlowTest Fake Regression Suite covering eligibility, disconnect, reconnect and transfer flows.', contact: { name: 'FlowTest Platform', email: 'flowtest@example.com' }, license: { name: 'MIT', url: 'https://opensource.org/licenses/MIT' } },
+          servers: [{ url: 'http://localhost:8080', description: 'WireMock local' }, { url: 'https://api.staging.example.com', description: 'Staging' }],
+          tags: [{ name: 'eligibility', description: 'Eligibility checking endpoints' }, { name: 'disconnect', description: 'Service disconnect flow' }, { name: 'reconnect', description: 'Service reconnect flow' }, { name: 'transfer', description: 'Service transfer flow' }, { name: 'health', description: 'Health and readiness probes' }],
+          paths: {
+            '/v1/eligibility/check': { post: { tags: ['eligibility'], summary: 'Check customer eligibility', operationId: 'checkEligibility', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['customerId', 'serviceType', 'requestType'], properties: { customerId: { type: 'string', description: 'Unique customer identifier', example: 'CUST-100234' }, serviceType: { type: 'string', enum: ['ELECTRICITY', 'GAS', 'WATER', 'TELECOM'], description: 'Type of utility service' }, requestType: { type: 'string', enum: ['DISCONNECT', 'RECONNECT', 'TRANSFER'], description: 'Type of service request' }, customerName: { type: 'string', description: 'Legal name of the customer' }, customerClassification: { type: 'string', enum: ['RESIDENTIAL', 'COMMERCIAL', 'INDUSTRIAL'] }, effectiveDate: { type: 'string', format: 'date', description: 'Requested effective date' }, metadata: { type: 'object', properties: { source: { type: 'string' }, correlationId: { type: 'string', format: 'uuid' }, priority: { type: 'integer', minimum: 1, maximum: 5 } } } } } } } }, responses: { '200': { description: 'Eligibility result', content: { 'application/json': { schema: { type: 'object', properties: { eligible: { type: 'boolean' }, reason: { type: 'string' }, restrictions: { type: 'array', items: { type: 'string' } }, estimatedCompletionDays: { type: 'integer' } } } } } }, '400': { description: 'Invalid request' }, '404': { description: 'Customer not found' }, '503': { description: 'Dependency timeout' } } } },
+            '/v1/disconnect': { post: { tags: ['disconnect'], summary: 'Initiate service disconnect', operationId: 'initiateDisconnect', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['customerId', 'serviceType', 'reason'], properties: { customerId: { type: 'string' }, serviceType: { type: 'string' }, reason: { type: 'string', enum: ['CUSTOMER_REQUEST', 'NON_PAYMENT', 'SAFETY', 'REGULATORY'] }, scheduledDate: { type: 'string', format: 'date-time' }, notifyCustomer: { type: 'boolean', default: true }, notes: { type: 'string', maxLength: 500 } } } } } }, responses: { '200': { description: 'Disconnect initiated', content: { 'application/json': { schema: { type: 'object', properties: { orderId: { type: 'string', format: 'uuid' }, status: { type: 'string', enum: ['PENDING', 'SCHEDULED', 'IN_PROGRESS'] }, estimatedCompletion: { type: 'string', format: 'date-time' } } } } } }, '409': { description: 'Active pending order exists' } } } },
+            '/v1/reconnect': { post: { tags: ['reconnect'], summary: 'Initiate service reconnect', operationId: 'initiateReconnect', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['customerId', 'serviceType'], properties: { customerId: { type: 'string' }, serviceType: { type: 'string' }, paymentConfirmation: { type: 'string' }, expedited: { type: 'boolean', default: false } } } } } }, responses: { '200': { description: 'Reconnect initiated' }, '402': { description: 'Outstanding balance' } } } },
+            '/v1/transfer': { post: { tags: ['transfer'], summary: 'Transfer service to new address', operationId: 'transferService', requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['customerId', 'serviceType', 'newAddress'], properties: { customerId: { type: 'string' }, serviceType: { type: 'string' }, newAddress: { type: 'object', required: ['street', 'city', 'state', 'zip'], properties: { street: { type: 'string' }, unit: { type: 'string' }, city: { type: 'string' }, state: { type: 'string', minLength: 2, maxLength: 2 }, zip: { type: 'string', pattern: '^[0-9]{5}$' } } }, transferDate: { type: 'string', format: 'date' } } } } } }, responses: { '200': { description: 'Transfer initiated' }, '400': { description: 'Address validation failed' } } } },
+            '/health': { get: { tags: ['health'], summary: 'Health check', operationId: 'healthCheck', responses: { '200': { description: 'Healthy', content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string' }, uptime: { type: 'number' }, dependencies: { type: 'object' } } } } } } } } }
+          },
+          components: { securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } } },
+          security: [{ bearerAuth: [] }]
+        };
+        var bigSpecStr = JSON.stringify(bigSpec);
+
+        /* Events with in_progress -> success pairs and delays totaling ~10s */
+        var events = [
+          { delay: 300, ev: { time: '10:00:01', stage: 'UI', status: 'success', title: 'Status Panel Initialized', detail: 'Fake run bootstrapped.', meta: { editor: 'VS Code', extension: 'flowtest-copilot', version: '0.0.1' } } },
+          { delay: 400, ev: { time: '10:00:02', stage: 'Intake', status: 'success', title: 'Documents Received', detail: '5 documents captured.', meta: { docs: 5, mode: 'multi_upload', format: 'json' } } },
+          { delay: 500, ev: { time: '10:00:03', stage: 'API Spec', status: 'in_progress', title: 'AI Request Dispatched', detail: 'task=GENERATE_API_SPEC', meta: { task: 'GENERATE_API_SPEC', provider: 'copilot', model: 'gpt-4o' } } },
+          { delay: 3000, ev: { time: '10:00:06', stage: 'API Spec', status: 'success', title: 'AI Response Received', detail: bigSpecStr.length + ' chars', meta: { task: 'GENERATE_API_SPEC', provider: 'copilot', model: 'gpt-4o', response_chars: bigSpecStr.length, duration_ms: 3100 }, actions: [{ label: 'AI Response', title: 'API Spec - Generated', content: bigSpecStr }] } },
+          { delay: 500, ev: { time: '10:00:07', stage: 'WireMock', status: 'in_progress', title: 'Generating Mocks', detail: 'Building WireMock stubs...', meta: { endpoint: '/v1/eligibility/check', method: 'POST' } } },
+          { delay: 2000, ev: { time: '10:00:09', stage: 'WireMock', status: 'success', title: 'Mocks Completed', detail: '4 mappings generated.', meta: { mappings: 4, base_url: 'http://localhost:8080', duration_ms: 1980 }, actions: [{ label: 'Mocks', title: 'WireMock Mappings', content: JSON.stringify([{request:{method:'POST',url:'/v1/eligibility/check'},response:{status:200,body:'{eligible:true}'}},{request:{method:'POST',url:'/v1/disconnect'},response:{status:200}},{request:{method:'POST',url:'/v1/reconnect'},response:{status:200}},{request:{method:'POST',url:'/v1/transfer'},response:{status:200}}], null, 2) }] } },
+          { delay: 400, ev: { time: '10:00:10', stage: 'Scenario DSL', status: 'in_progress', title: 'Generating Scenario', detail: 'task=GENERATE_SCENARIO_DSL', meta: { task: 'GENERATE_SCENARIO_DSL', provider: 'copilot', model: 'gpt-4o' } } },
+          { delay: 1800, ev: { time: '10:00:12', stage: 'Scenario DSL', status: 'success', title: 'Scenario Generated', detail: '7 steps validated.', meta: { steps: 7, tags: 'ui,api,db,async,vision', duration_ms: 1750 } } },
+          { delay: 300, ev: { time: '10:00:13', stage: 'Engine Run', status: 'in_progress', title: 'Executing Test', detail: 'HTTP POST /engine/run', meta: { endpoint: 'http://localhost:9090/engine/run', method: 'POST' } } },
+          { delay: 1500, ev: { time: '10:00:14', stage: 'Engine Run', status: 'success', title: 'Execution Completed', detail: 'HTTP 200 — 12 passed, 0 failed', meta: { status: 200, duration_ms: 1480, assertions_passed: 12, assertions_failed: 0 } } },
+          { delay: 500, ev: { time: '10:00:15', stage: 'Artifacts', status: 'success', title: 'Persisted', detail: '/workspace/.flowtest-runs/fake', meta: { output_path: '/workspace/.flowtest-runs/fake', files: 4 } } }
+        ];
+
+        setSummary('API Spec generating...', 'Fake regression sequence');
+
+        for (var i = 0; i < events.length; i++) {
+          await sleep(events[i].delay);
+          var e = events[i].ev;
+          addEvent(e);
+          /* Update summary text per stage */
+          if (e.status === 'in_progress' || e.status === 'running') {
+            setSummary(e.title + '...', e.stage);
+          }
+        }
+        setSummary('Completed', 'Fake regression sequence finished');
       }
 
       if (timeline) timeline.addEventListener('click', (event) => {
@@ -1760,6 +1918,10 @@ export class FlowtestStatusPanel {
           if (successCount) successCount.textContent = String(p.successCount ?? 0);
           if (failureCount) failureCount.textContent = String(p.failureCount ?? 0);
           if (intakeMode) intakeMode.textContent = String(p.intakeMode || '-');
+          /* Hide Fake button during real runs */
+          var fb = document.getElementById('fakeRunBtn');
+          if (fb) fb.style.display = 'none';
+          if (lastRowLabel) lastRowLabel.textContent = '';
         } else if (msg.type === 'temporal') {
           const p = msg.payload || {};
           if (p.temporalLink) { meta.temporalLink = p.temporalLink; renderMeta(); }

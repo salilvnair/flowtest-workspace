@@ -1,0 +1,14 @@
+{
+  "wireMockEnabled" : false,
+  "wireMockStubCount" : 0,
+  "failureStepId" : "step-03-address-validation",
+  "success" : false,
+  "endedAt" : "2026-04-04T05:53:18.312749Z",
+  "totalSteps" : 3,
+  "startedAt" : "2026-04-04T05:53:18.089805Z",
+  "allureResultsDirectory" : "/Users/salilvnair/workspace/git/salilvnair/flowtest-workspace/flowtest-parent/allure-results",
+  "durationMs" : 223,
+  "passedSteps" : 2,
+  "failedSteps" : 1,
+  "wireMockBaseUrl" : null
+}

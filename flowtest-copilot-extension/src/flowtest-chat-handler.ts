@@ -650,6 +650,7 @@ async function handleStartCommand(
     wiremockBaseUrl: "pending (engine will publish base URL)"
   });
   pushVerbose("RUN", "started", `runName=${intake.runName}`);
+  statusPanel.setSummary({ status: "Running", detail: "Initializing..." });
   pushVerbose("UI", "status_panel_initialized");
   if (intake.fakeRun) {
     const fx = createFakeRunFixture();
@@ -709,6 +710,7 @@ async function handleStartCommand(
   }
 
   stream.progress("Generating API spec...");
+  statusPanel.setSummary({ status: "Running", detail: "Generating API spec..." });
   pushVerbose("UI", "progress", "Generating API spec...");
   pushVerbose("API_SPEC", "started");
   const apiSpecPrompt = `Generate normalized API spec from these docs.\n\n${docsText}${promptContextAddon}`;
@@ -790,6 +792,7 @@ async function handleStartCommand(
   }
 
   stream.progress("Generating WireMock definitions...");
+  statusPanel.setSummary({ status: "Running", detail: "Generating WireMock definitions..." });
   pushVerbose("UI", "progress", "Generating WireMock definitions...");
   pushVerbose("WIREMOCK", "started");
   const wiremockPrompt = `Generate WireMock mappings using this API understanding:\n\n${apiSpecOutput}${promptContextAddon}`;
@@ -871,6 +874,7 @@ async function handleStartCommand(
   }
 
   stream.progress("Generating FlowTest scenario DSL...");
+  statusPanel.setSummary({ status: "Running", detail: "Generating FlowTest scenario DSL..." });
   pushVerbose("UI", "progress", "Generating FlowTest scenario DSL...");
   pushVerbose("SCENARIO_DSL", "started");
   const strictSchemaHint = [
@@ -1020,6 +1024,7 @@ async function handleStartCommand(
   }
 
   stream.progress("Running FlowTest engine validation...");
+  statusPanel.setSummary({ status: "Running", detail: "Running FlowTest engine validation..." });
   pushVerbose("UI", "progress", "Running FlowTest engine validation...");
   const engineRuns: Array<{ ok: boolean; status: number; body: string; workflowId?: string; runId?: string; scenarioId?: string }> = [];
   for (let i = 0; i < normalizedScenarios.length; i++) {
@@ -1175,6 +1180,7 @@ async function handleStartCommand(
   }
 
   pushVerbose("ALLURE", "generate_started");
+  statusPanel.setSummary({ status: "Running", detail: "Generating Allure report..." });
   const allureReport = await generateAndOpenAllureReport();
   if (allureReport.ok) {
     if (allureReport.reportPath) {
