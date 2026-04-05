@@ -369,7 +369,54 @@ export async function runIntakePromptChain(
   const provider = getProvider();
   const model = getModel(provider);
 
-  const apiSpecPrompt = `Generate normalized API spec from these docs.\n\n${docsText}${addon}`;
+  const apiSpecPrompt =
+    [
+      "Generate normalized API spec JSON from these docs.",
+      "",
+      "STRICT OUTPUT FORMAT (JSON only, no markdown):",
+      "{",
+      '  "project": "string",',
+      '  "version": "1.0.0",',
+      '  "basePath": "/",',
+      '  "apis": [',
+      "    {",
+      '      "apiId": "string",',
+      '      "name": "string",',
+      '      "method": "POST",',
+      '      "path": "/example/path",',
+      '      "purpose": "string",',
+      '      "request": { "type": "object", "properties": {}, "required": [] },',
+      '      "responses": [',
+      "        {",
+      '          "name": "SUCCESS",',
+      '          "httpStatus": 200,',
+      '          "body": { "type": "object", "properties": {}, "required": [] },',
+      '          "sample": {}',
+      "        },",
+      "        {",
+      '          "name": "FAILURE_CODE",',
+      '          "httpStatus": 400,',
+      '          "body": { "type": "object", "properties": {}, "required": [] },',
+      '          "sample": {}',
+      "        }",
+      "      ]",
+      "    }",
+      "  ]",
+      "}",
+      "",
+      "MANDATORY RULES:",
+      "1) Every API MUST include request schema under request.",
+      "2) Every API MUST include at least one success response (2xx) and one failure response (4xx or 5xx).",
+      "3) Every response MUST include both body schema and sample example.",
+      "4) Response samples MUST be realistic and consistent with docs.",
+      "5) For endpoint names/paths/statuses/examples, prioritize SUCCESS and FAILURE sample docs first.",
+      "6) Do not omit failure variants if available in docs.",
+      "7) Do not wrap output in backticks.",
+      "",
+      "Use only information inferable from the provided docs. Do not invent unrelated APIs.",
+      "",
+      docsText + addon
+    ].join("\n");
   const apiSpecStartedAt = new Date().toISOString();
   await onProgress?.({
     stage: "API Spec",

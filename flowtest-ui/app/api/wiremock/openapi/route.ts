@@ -24,6 +24,25 @@ function sampleFromSchema(schema: any): any {
   return "sample";
 }
 
+function pickStatus(node: any, fallback: number): string {
+  return String(Number(node?.httpStatus ?? node?.statusCode ?? fallback));
+}
+
+function normalizeResponses(api: any): Array<any> {
+  if (Array.isArray(api?.responses)) {
+    return api.responses.filter((r: any) => r && typeof r === "object");
+  }
+
+  const out: Array<any> = [];
+  const success = api?.responses?.success;
+  if (success && typeof success === "object") out.push(success);
+  const failures = Array.isArray(api?.responses?.failures) ? api.responses.failures : [];
+  for (const f of failures) {
+    if (f && typeof f === "object") out.push(f);
+  }
+  return out;
+}
+
 function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
   if (!raw || typeof raw !== "object") return null;
   if (raw.openapi && raw.paths && typeof raw.paths === "object") return raw;
@@ -38,13 +57,15 @@ function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
     const requestSchema =
       (api.requestSchema && typeof api.requestSchema === "object" ? api.requestSchema : undefined) ||
       (api.request && typeof api.request === "object" ? api.request : undefined);
-    const successNode = api.responses?.success && typeof api.responses.success === "object" ? api.responses.success : {};
-    const successStatus = String(Number(successNode.statusCode || 200));
+    const responseNodes = normalizeResponses(api);
+    const successNode = responseNodes.find((n: any) => Number(n?.httpStatus ?? n?.statusCode ?? 200) < 400) || {};
+    const successStatus = pickStatus(successNode, 200);
     const successSchema =
-      (successNode.body && typeof successNode.body === "object" ? successNode.body : undefined) ||
+      (successNode?.body && typeof successNode.body === "object" ? successNode.body : undefined) ||
       (api.responseSchema?.success && typeof api.responseSchema.success === "object" ? api.responseSchema.success : undefined);
-    const successExample = successNode.example ?? api.successExample ?? (successSchema ? sampleFromSchema(successSchema) : undefined);
-    const failureNodes = Array.isArray(api.responses?.failures) ? api.responses.failures : [];
+    const successExample =
+      successNode?.sample ?? successNode?.example ?? api.successExample ?? (successSchema ? sampleFromSchema(successSchema) : undefined);
+    const failureNodes = responseNodes.filter((n: any) => Number(n?.httpStatus ?? n?.statusCode ?? 0) >= 400);
     const failureExamples = Array.isArray(api.failureExamples) ? api.failureExamples : [];
 
     const responses: JsonMap = {};
@@ -60,9 +81,9 @@ function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
 
     for (let i = 0; i < failureNodes.length; i++) {
       const f = failureNodes[i] || {};
-      const code = String(Number(f.statusCode || 400));
+      const code = pickStatus(f, 400);
       const bodySchema = f.body && typeof f.body === "object" ? f.body : undefined;
-      const example = f.example ?? (bodySchema ? sampleFromSchema(bodySchema) : undefined);
+      const example = f.sample ?? f.example ?? (bodySchema ? sampleFromSchema(bodySchema) : undefined);
       if (!responses[code]) {
         responses[code] = {
           description: String(f.name || f.errorCode || "Failure response"),
@@ -74,6 +95,17 @@ function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
           }
         };
       }
+    }
+
+    if (!responses["200"]) {
+      responses["200"] = {
+        description: "Success response",
+        content: {
+          "application/json": {
+            example: {}
+          }
+        }
+      };
     }
 
     if (failureExamples.length > 0) {

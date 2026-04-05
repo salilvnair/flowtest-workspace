@@ -1,66 +1,30 @@
 {
-  "project": {
-    "name": "Zapper Electricity Disconnect",
-    "type": "simulation",
-    "customer": "UPS",
-    "sites": [
-      {
-        "siteId": "UPS-TX-001",
-        "state": "TX",
-        "city": "Dallas"
-      },
-      {
-        "siteId": "UPS-NJ-002",
-        "state": "NJ",
-        "city": "Newark"
-      }
-    ]
-  },
+  "project": "Zapper Electricity Disconnect",
+  "version": "1.0.0",
+  "basePath": "/",
   "apis": [
     {
       "apiId": "API1",
       "name": "AddressValidation",
       "method": "POST",
       "path": "/address/validate",
-      "syncAsync": "SYNC",
-      "slaSeconds": 2,
       "purpose": "Validate customer site addresses",
       "request": {
         "type": "object",
-        "required": [
-          "customerType",
-          "customerName",
-          "requestType",
-          "sites"
-        ],
         "properties": {
           "customerType": {
-            "type": "string",
-            "enum": [
-              "ENTERPRISE"
-            ]
+            "type": "string"
           },
           "customerName": {
             "type": "string"
           },
           "requestType": {
-            "type": "string",
-            "enum": [
-              "DISCONNECT"
-            ]
+            "type": "string"
           },
           "sites": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "object",
-              "required": [
-                "siteId",
-                "state",
-                "city",
-                "zip",
-                "addressLine1"
-              ],
               "properties": {
                 "siteId": {
                   "type": "string"
@@ -77,51 +41,127 @@
                 "addressLine1": {
                   "type": "string"
                 }
-              }
-            }
-          }
-        }
-      },
-      "responses": {
-        "success": {
-          "type": "object",
-          "required": [
-            "status",
-            "validatedSites"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "VALIDATED"
+              },
+              "required": [
+                "siteId",
+                "state",
+                "city",
+                "zip",
+                "addressLine1"
               ]
-            },
-            "validatedSites": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "siteId",
-                  "isValid",
-                  "normalizedAddress"
-                ],
-                "properties": {
-                  "siteId": {
-                    "type": "string"
-                  },
-                  "isValid": {
-                    "type": "boolean"
-                  },
-                  "normalizedAddress": {
-                    "type": "string"
-                  }
-                }
-              }
             }
           }
         },
-        "failures": [
-          {
+        "required": [
+          "customerType",
+          "customerName",
+          "requestType",
+          "sites"
+        ]
+      },
+      "responses": [
+        {
+          "name": "SUCCESS",
+          "httpStatus": 200,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "validatedSites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string"
+                    },
+                    "isValid": {
+                      "type": "boolean"
+                    },
+                    "normalizedAddress": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "siteId",
+                    "isValid",
+                    "normalizedAddress"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "status",
+              "validatedSites"
+            ]
+          },
+          "sample": {
+            "status": "VALIDATED",
+            "validatedSites": [
+              {
+                "siteId": "UPS-TX-001",
+                "isValid": true,
+                "normalizedAddress": "1200 LOGISTICS PKWY, DALLAS, TX 75001"
+              },
+              {
+                "siteId": "UPS-NJ-002",
+                "isValid": true,
+                "normalizedAddress": "900 DISTRIBUTION AVE, NEWARK, NJ 07102"
+              }
+            ]
+          }
+        },
+        {
+          "name": "ADDR_MISMATCH",
+          "httpStatus": 400,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "validatedSites": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string"
+                    },
+                    "isValid": {
+                      "type": "boolean"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "normalizedAddress": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "siteId",
+                    "isValid",
+                    "normalizedAddress"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "status",
+              "errorCode",
+              "message",
+              "validatedSites"
+            ]
+          },
+          "sample": {
             "status": "REJECTED",
             "errorCode": "ADDR_MISMATCH",
             "message": "Address mismatch for one or more sites",
@@ -139,33 +179,22 @@
               }
             ]
           }
-        ]
-      }
+        }
+      ]
     },
     {
       "apiId": "API2",
       "name": "InventoryValidation",
       "method": "POST",
       "path": "/inventory/validate",
-      "syncAsync": "SYNC",
-      "slaSeconds": 2,
       "purpose": "Validate transformer and connection existence",
       "request": {
         "type": "object",
-        "required": [
-          "sites"
-        ],
         "properties": {
           "sites": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "object",
-              "required": [
-                "siteId",
-                "transformerId",
-                "connectionId"
-              ],
               "properties": {
                 "siteId": {
                   "type": "string"
@@ -176,55 +205,130 @@
                 "connectionId": {
                   "type": "string"
                 }
-              }
-            }
-          }
-        }
-      },
-      "responses": {
-        "success": {
-          "type": "object",
-          "required": [
-            "status",
-            "inventoryChecks"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "OK"
+              },
+              "required": [
+                "siteId",
+                "transformerId",
+                "connectionId"
               ]
-            },
-            "inventoryChecks": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "siteId",
-                  "transformerExists",
-                  "connectionExists",
-                  "feeder"
-                ],
-                "properties": {
-                  "siteId": {
-                    "type": "string"
-                  },
-                  "transformerExists": {
-                    "type": "boolean"
-                  },
-                  "connectionExists": {
-                    "type": "boolean"
-                  },
-                  "feeder": {
-                    "type": "string"
-                  }
-                }
-              }
             }
           }
         },
-        "failures": [
-          {
+        "required": [
+          "sites"
+        ]
+      },
+      "responses": [
+        {
+          "name": "SUCCESS",
+          "httpStatus": 200,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "inventoryChecks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string"
+                    },
+                    "transformerExists": {
+                      "type": "boolean"
+                    },
+                    "connectionExists": {
+                      "type": "boolean"
+                    },
+                    "feeder": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "siteId",
+                    "transformerExists",
+                    "connectionExists",
+                    "feeder"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "status",
+              "inventoryChecks"
+            ]
+          },
+          "sample": {
+            "status": "OK",
+            "inventoryChecks": [
+              {
+                "siteId": "UPS-TX-001",
+                "transformerExists": true,
+                "connectionExists": true,
+                "feeder": "FD-TX-17"
+              },
+              {
+                "siteId": "UPS-NJ-002",
+                "transformerExists": true,
+                "connectionExists": true,
+                "feeder": "FD-NJ-04"
+              }
+            ]
+          }
+        },
+        {
+          "name": "INVENTORY_ASSET_NOT_FOUND",
+          "httpStatus": 400,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "inventoryChecks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string"
+                    },
+                    "transformerExists": {
+                      "type": "boolean"
+                    },
+                    "connectionExists": {
+                      "type": "boolean"
+                    },
+                    "missingField": {
+                      "type": "string"
+                    },
+                    "providedConnectionId": {
+                      "type": "string"
+                    },
+                    "providedTransformerId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "siteId",
+                    "transformerExists",
+                    "connectionExists"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "status",
+              "errorCode",
+              "inventoryChecks"
+            ]
+          },
+          "sample": {
             "status": "FAILED",
             "errorCode": "INVENTORY_ASSET_NOT_FOUND",
             "inventoryChecks": [
@@ -244,36 +348,25 @@
               }
             ]
           }
-        ]
-      }
+        }
+      ]
     },
     {
       "apiId": "API3",
       "name": "GetPendingBills",
       "method": "POST",
       "path": "/billing/pending",
-      "syncAsync": "SYNC",
-      "slaSeconds": 3,
       "purpose": "Check pending bills before disconnect",
       "request": {
         "type": "object",
-        "required": [
-          "customerAccountId",
-          "sites"
-        ],
         "properties": {
           "customerAccountId": {
             "type": "string"
           },
           "sites": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "object",
-              "required": [
-                "siteId",
-                "connectionId"
-              ],
               "properties": {
                 "siteId": {
                   "type": "string"
@@ -281,51 +374,122 @@
                 "connectionId": {
                   "type": "string"
                 }
-              }
-            }
-          }
-        }
-      },
-      "responses": {
-        "success": {
-          "type": "object",
-          "required": [
-            "status",
-            "pendingBills"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "CLEAR"
+              },
+              "required": [
+                "siteId",
+                "connectionId"
               ]
-            },
-            "pendingBills": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "required": [
-                  "siteId",
-                  "amount",
-                  "currency"
-                ],
-                "properties": {
-                  "siteId": {
-                    "type": "string"
-                  },
-                  "amount": {
-                    "type": "number"
-                  },
-                  "currency": {
-                    "type": "string"
-                  }
-                }
-              }
             }
           }
         },
-        "failures": [
-          {
+        "required": [
+          "customerAccountId",
+          "sites"
+        ]
+      },
+      "responses": [
+        {
+          "name": "SUCCESS",
+          "httpStatus": 200,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "pendingBills": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "siteId",
+                    "amount",
+                    "currency"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "status",
+              "pendingBills"
+            ]
+          },
+          "sample": {
+            "status": "CLEAR",
+            "pendingBills": [
+              {
+                "siteId": "UPS-TX-001",
+                "amount": 0,
+                "currency": "USD"
+              },
+              {
+                "siteId": "UPS-NJ-002",
+                "amount": 0,
+                "currency": "USD"
+              }
+            ]
+          }
+        },
+        {
+          "name": "PENDING_BILLS_FOUND",
+          "httpStatus": 400,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "pendingBills": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "siteId": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "number"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "agingDays": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "siteId",
+                    "amount",
+                    "currency"
+                  ]
+                }
+              },
+              "actionRequired": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "errorCode",
+              "pendingBills",
+              "actionRequired"
+            ]
+          },
+          "sample": {
             "status": "BLOCKED",
             "errorCode": "PENDING_BILLS_FOUND",
             "pendingBills": [
@@ -344,44 +508,28 @@
             ],
             "actionRequired": "CLEAR_DUES_BEFORE_DISCONNECT"
           }
-        ]
-      }
+        }
+      ]
     },
     {
       "apiId": "API4",
       "name": "SubmitDisconnectRequest",
       "method": "POST",
       "path": "/disconnect/submit",
-      "syncAsync": "SYNC",
-      "slaSeconds": 4,
       "purpose": "Submit disconnect request and receive tracking ids",
       "request": {
         "type": "object",
-        "required": [
-          "requestType",
-          "requestedBy",
-          "sites"
-        ],
         "properties": {
           "requestType": {
-            "type": "string",
-            "enum": [
-              "DISCONNECT"
-            ]
+            "type": "string"
           },
           "requestedBy": {
             "type": "string"
           },
           "sites": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "object",
-              "required": [
-                "siteId",
-                "connectionId",
-                "transformerId"
-              ],
               "properties": {
                 "siteId": {
                   "type": "string"
@@ -392,48 +540,142 @@
                 "transformerId": {
                   "type": "string"
                 }
-              }
-            }
-          }
-        }
-      },
-      "responses": {
-        "success": {
-          "type": "object",
-          "required": [
-            "status",
-            "transactionId",
-            "correlationId",
-            "estimatedCompletionMinutes"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "ACCEPTED"
+              },
+              "required": [
+                "siteId",
+                "connectionId",
+                "transformerId"
               ]
-            },
-            "transactionId": {
-              "type": "string"
-            },
-            "correlationId": {
-              "type": "string"
-            },
-            "estimatedCompletionMinutes": {
-              "type": "integer"
             }
           }
         },
-        "failures": [
-          {
+        "required": [
+          "requestType",
+          "requestedBy",
+          "sites"
+        ]
+      },
+      "responses": [
+        {
+          "name": "SUCCESS",
+          "httpStatus": 200,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "transactionId": {
+                "type": "string"
+              },
+              "correlationId": {
+                "type": "string"
+              },
+              "estimatedCompletionMinutes": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "status",
+              "transactionId",
+              "correlationId",
+              "estimatedCompletionMinutes"
+            ]
+          },
+          "sample": {
+            "status": "ACCEPTED",
+            "transactionId": "TXN-2026-0402-00091",
+            "correlationId": "CORR-59A1F0B8-UPS-DISC",
+            "estimatedCompletionMinutes": 90
+          }
+        },
+        {
+          "name": "DUPLICATE_DISCONNECT_REQUEST",
+          "httpStatus": 409,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "existingTransactionId": {
+                "type": "string"
+              },
+              "existingCorrelationId": {
+                "type": "string"
+              },
+              "retryAfterSeconds": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "status",
+              "errorCode",
+              "message",
+              "existingTransactionId",
+              "existingCorrelationId",
+              "retryAfterSeconds"
+            ]
+          },
+          "sample": {
             "status": "CONFLICT",
             "errorCode": "DUPLICATE_DISCONNECT_REQUEST",
             "message": "An active disconnect request already exists for one or more sites",
             "existingTransactionId": "TXN-2026-0401-00991",
             "existingCorrelationId": "CORR-ACTIVE-UPS-DISC",
             "retryAfterSeconds": 1800
+          }
+        },
+        {
+          "name": "PRECHECK_FAILED",
+          "httpStatus": 400,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "failedChecks": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "transactionId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "correlationId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "errorCode",
+              "message",
+              "failedChecks",
+              "transactionId",
+              "correlationId"
+            ]
           },
-          {
+          "sample": {
             "status": "REJECTED",
             "errorCode": "PRECHECK_FAILED",
             "message": "Disconnect request rejected due to unresolved pre-check failures",
@@ -444,30 +686,20 @@
             "transactionId": null,
             "correlationId": null
           }
-        ]
-      }
+        }
+      ]
     },
     {
       "apiId": "API5",
       "name": "DisconnectOrderCallback",
       "method": "POST",
       "path": "/callbacks/disconnect-order",
-      "syncAsync": "ASYNC",
-      "slaSeconds": 30,
       "purpose": "Async callback with disconnect order number",
       "request": {
         "type": "object",
-        "required": [
-          "eventType",
-          "transactionId",
-          "correlationId"
-        ],
         "properties": {
           "eventType": {
-            "type": "string",
-            "enum": [
-              "DISCONNECT_ORDER_CREATED"
-            ]
+            "type": "string"
           },
           "transactionId": {
             "type": "string"
@@ -479,140 +711,73 @@
             "type": "string"
           },
           "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "responses": {
-        "success": {
-          "type": "object",
-          "required": [
-            "status",
-            "receivedAt"
-          ],
-          "properties": {
-            "status": {
-              "type": "string",
-              "enum": [
-                "ACKNOWLEDGED"
-              ]
-            },
-            "receivedAt": {
-              "type": "string",
-              "format": "date-time"
-            }
+            "type": "string"
           }
         },
-        "failures": [
-          {
+        "required": [
+          "transactionId",
+          "correlationId",
+          "eventType"
+        ]
+      },
+      "responses": [
+        {
+          "name": "SUCCESS",
+          "httpStatus": 200,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "receivedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "receivedAt"
+            ]
+          },
+          "sample": {
+            "status": "ACKNOWLEDGED",
+            "receivedAt": "2026-04-02T15:30:01Z"
+          }
+        },
+        {
+          "name": "UNKNOWN_CORRELATION_ID",
+          "httpStatus": 400,
+          "body": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "errorCode": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "receivedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "errorCode",
+              "message",
+              "receivedAt"
+            ]
+          },
+          "sample": {
             "status": "REJECTED",
             "errorCode": "UNKNOWN_CORRELATION_ID",
             "message": "Correlation ID not found in active disconnect workflow",
             "receivedAt": "2026-04-02T15:30:01Z"
           }
-        ]
-      }
-    },
-    {
-      "apiId": "API6",
-      "name": "SoftDisconnectEvent",
-      "method": "POST",
-      "path": "/events/disconnect-status",
-      "syncAsync": "ASYNC",
-      "slaSeconds": 30,
-      "purpose": "Async progress event #1",
-      "request": {
-        "type": "object",
-        "required": [
-          "correlationId",
-          "eventType"
-        ],
-        "properties": {
-          "correlationId": {
-            "type": "string"
-          },
-          "eventType": {
-            "type": "string",
-            "enum": [
-              "SOFT_DISCONNECT_DONE"
-            ]
-          }
         }
-      }
-    },
-    {
-      "apiId": "API7",
-      "name": "RippedOffWiresEvent",
-      "method": "POST",
-      "path": "/events/disconnect-status",
-      "syncAsync": "ASYNC",
-      "slaSeconds": 30,
-      "purpose": "Async progress event #2",
-      "request": {
-        "type": "object",
-        "required": [
-          "correlationId",
-          "eventType"
-        ],
-        "properties": {
-          "correlationId": {
-            "type": "string"
-          },
-          "eventType": {
-            "type": "string",
-            "enum": [
-              "RIPPED_OFF_WIRES"
-            ]
-          }
-        }
-      }
-    },
-    {
-      "apiId": "API8",
-      "name": "HardDisconnectEvent",
-      "method": "POST",
-      "path": "/events/disconnect-status",
-      "syncAsync": "ASYNC",
-      "slaSeconds": 30,
-      "purpose": "Async progress event #3 final",
-      "request": {
-        "type": "object",
-        "required": [
-          "correlationId",
-          "eventType"
-        ],
-        "properties": {
-          "correlationId": {
-            "type": "string"
-          },
-          "eventType": {
-            "type": "string",
-            "enum": [
-              "HARD_DISCONNECT_DONE"
-            ]
-          }
-        }
-      }
+      ]
     }
-  ],
-  "asyncWorkflow": {
-    "correlationIdRequired": true,
-    "eventOrder": [
-      "SOFT_DISCONNECT_DONE",
-      "RIPPED_OFF_WIRES",
-      "HARD_DISCONNECT_DONE"
-    ],
-    "validationRules": [
-      "events must be processed in order",
-      "duplicate callbacks/events must be retry-safe",
-      "final hard disconnect event is mandatory",
-      "unknown correlationId must be rejected"
-    ],
-    "failureCodes": [
-      "UNKNOWN_CORRELATION_ID",
-      "EVENT_SEQUENCE_INVALID",
-      "HARD_DISCONNECT_EVENT_MISSING"
-    ]
-  }
+  ]
 }

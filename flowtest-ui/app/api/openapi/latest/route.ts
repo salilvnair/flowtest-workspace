@@ -21,6 +21,25 @@ function sampleFromSchema(schema: any): any {
   return "sample";
 }
 
+function pickStatus(node: any, fallback: number): string {
+  return String(Number(node?.httpStatus ?? node?.statusCode ?? fallback));
+}
+
+function normalizeResponses(api: any): Array<any> {
+  if (Array.isArray(api?.responses)) {
+    return api.responses.filter((r: any) => r && typeof r === "object");
+  }
+
+  const out: Array<any> = [];
+  const success = api?.responses?.success;
+  if (success && typeof success === "object") out.push(success);
+  const failures = Array.isArray(api?.responses?.failures) ? api.responses.failures : [];
+  for (const f of failures) {
+    if (f && typeof f === "object") out.push(f);
+  }
+  return out;
+}
+
 function toOpenApiIfNeeded(raw: any): any {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   if (raw.openapi && raw.paths && typeof raw.paths === "object") return raw;
@@ -35,33 +54,33 @@ function toOpenApiIfNeeded(raw: any): any {
     const requestSchema =
       (api.requestSchema && typeof api.requestSchema === "object" ? api.requestSchema : undefined) ||
       (api.request && typeof api.request === "object" ? api.request : undefined);
-    const successNode = api.responses?.success && typeof api.responses.success === "object" ? api.responses.success : {};
-    const successStatus = String(Number(successNode.statusCode || 200));
-    const successSchema = successNode.body && typeof successNode.body === "object" ? successNode.body : undefined;
-    const successExample = successNode.example ?? (successSchema ? sampleFromSchema(successSchema) : undefined);
-    const failures = Array.isArray(api.responses?.failures) ? api.responses.failures : [];
+    const responseNodes = normalizeResponses(api);
+    const responses: Record<string, any> = {};
 
-    const responses: Record<string, any> = {
-      [successStatus]: {
-        description: "Success response",
-        content: {
-          "application/json": {
-            ...(successSchema ? { schema: successSchema } : {}),
-            ...(successExample ? { example: successExample } : {})
-          }
-        }
-      }
-    };
-    for (const f of failures) {
-      const code = String(Number(f?.statusCode || 400));
-      const bodySchema = f?.body && typeof f.body === "object" ? f.body : undefined;
-      const example = f?.example ?? (bodySchema ? sampleFromSchema(bodySchema) : undefined);
-      responses[code] = {
-        description: String(f?.name || f?.errorCode || "Failure response"),
+    for (const node of responseNodes) {
+      const status = pickStatus(node, 200);
+      const bodySchema = node?.body && typeof node.body === "object" ? node.body : undefined;
+      const example = node?.sample ?? node?.example ?? (bodySchema ? sampleFromSchema(bodySchema) : undefined);
+      const statusNum = Number(status);
+      const isFailure = statusNum >= 400;
+      if (responses[status]) continue;
+      responses[status] = {
+        description: String(node?.name || node?.errorCode || (isFailure ? "Failure response" : "Success response")),
         content: {
           "application/json": {
             ...(bodySchema ? { schema: bodySchema } : {}),
             ...(example ? { example } : {})
+          }
+        }
+      };
+    }
+
+    if (!responses["200"]) {
+      responses["200"] = {
+        description: "Success response",
+        content: {
+          "application/json": {
+            example: {}
           }
         }
       };
