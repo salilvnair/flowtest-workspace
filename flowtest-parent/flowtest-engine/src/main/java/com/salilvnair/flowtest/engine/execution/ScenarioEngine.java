@@ -400,6 +400,22 @@ public class ScenarioEngine {
                     Map<String, Object> existingMedia = (Map<String, Object>) existingContent.computeIfAbsent("application/json", k -> new LinkedHashMap<>());
                     putOpenApiExample(existingMedia, maybeJson(requestBody), "requestExample" + reqIndex);
                 }
+
+                // Add real runtime-captured request payloads (if available) as additional examples.
+                Object runtimeBodiesRaw = mapping.get("runtimeRequestBodies");
+                if (runtimeBodiesRaw instanceof List<?> runtimeBodies && !runtimeBodies.isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingRequestBody = (Map<String, Object>) operation.get("requestBody");
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingContent = (Map<String, Object>) existingRequestBody.computeIfAbsent("content", k -> new LinkedHashMap<>());
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingMedia = (Map<String, Object>) existingContent.computeIfAbsent("application/json", k -> new LinkedHashMap<>());
+                    for (Object runtimeBody : runtimeBodies) {
+                        int nextIdx = requestExampleCounter.getOrDefault(reqKey, 0) + 1;
+                        requestExampleCounter.put(reqKey, nextIdx);
+                        putOpenApiExample(existingMedia, maybeJson(runtimeBody), "runtimeRequestExample" + nextIdx);
+                    }
+                }
             }
 
             @SuppressWarnings("unchecked")
@@ -802,6 +818,16 @@ public class ScenarioEngine {
                     String mMethod = String.valueOf(mapping.getOrDefault("method", "")).toUpperCase();
                     String mUrl = normalizePath(String.valueOf(mapping.getOrDefault("url", "/")));
                     if (!method.equals(mMethod) || !url.equals(mUrl)) continue;
+
+                    @SuppressWarnings("unchecked")
+                    List<Object> runtimeBodies = (List<Object>) mapping.computeIfAbsent("runtimeRequestBodies", k -> new ArrayList<>());
+                    String runtimeBodyCanonical = toJsonString(runtimeRequestBody);
+                    boolean exists = runtimeBodies.stream()
+                            .map(this::toJsonString)
+                            .anyMatch(runtimeBodyCanonical::equals);
+                    if (!exists) {
+                        runtimeBodies.add(runtimeRequestBody);
+                    }
 
                     Object existing = mapping.get("requestBody");
                     boolean shouldSet = existing == null

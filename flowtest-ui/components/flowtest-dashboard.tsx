@@ -148,11 +148,30 @@ window.acquireVsCodeApi = function(){
   #runMeta .metaChip .metaValueText{
     color: #69b4ff !important;
   }
+  .scenarioModeChip{
+    color: #9fd1ff !important;
+    border-color: color-mix(in srgb, #9fd1ff 42%, var(--vscode-panel-border)) !important;
+    background: color-mix(in srgb, #9fd1ff 16%, transparent) !important;
+    font-weight: 800;
+  }
+  .scenarioModeChip[data-mode='extensive']{
+    color: #ffd27d !important;
+    border-color: color-mix(in srgb, #ffd27d 45%, var(--vscode-panel-border)) !important;
+    background: color-mix(in srgb, #ffd27d 15%, transparent) !important;
+  }
 </style>`;
 
     let html = STATUS_PANEL_TEMPLATE.replace(
       "if (fb) fb.style.display = 'none';",
       "if (fb) fb.style.display = (p && p.allowFake) ? '' : 'none';"
+    );
+    html = html.replace(
+      "if (intakeMode) intakeMode.textContent = String(p.intakeMode || '-');",
+      "if (intakeMode) { var sm = String((p && p.scenarioMode) || 'quick'); intakeMode.textContent = String(p.intakeMode || '-') + ' • ' + (sm === 'extensive' ? 'Extensive' : 'Quick'); } try { if (typeof updateScenarioModeChip === 'function') updateScenarioModeChip((p && p.scenarioMode) || 'quick'); } catch {}"
+    );
+    html = html.replace(
+      "function updateLayout() {",
+      "function updateScenarioModeChip(modeRaw){var mode=String(modeRaw||'quick').toLowerCase()==='extensive'?'extensive':'quick';var label=mode==='extensive'?'Extensive':'Quick';var heads=document.querySelectorAll('.sectionHeadRight');var target=null;for(var i=0;i<heads.length;i++){var h=heads[i];if(h&&h.querySelector&&h.querySelector('.followToggle')){target=h;break;}}if(!target)return;var chip=target.querySelector('#scenarioModeChip');if(!chip){chip=document.createElement('span');chip.id='scenarioModeChip';chip.className='chip scenarioModeChip';target.insertBefore(chip,target.firstChild);}chip.textContent='Scenario: '+label;chip.setAttribute('data-mode',mode);} function updateLayout() {"
     );
     html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, "");
     html = html.replace(
@@ -372,6 +391,7 @@ window.acquireVsCodeApi = function(){
     successCount: number,
     failureCount: number
   ) => {
+    const scenarioMode = String((intake as any)?.scenarioMode || "quick").toLowerCase() === "extensive" ? "extensive" : "quick";
     postToWebview("init", {
       runName,
       orchestrationId: "streaming",
@@ -379,6 +399,7 @@ window.acquireVsCodeApi = function(){
       successCount,
       failureCount,
       intakeMode: mode,
+      scenarioMode,
       allowFake: false
     });
     postToWebview("summary", { status: "Running", detail: "Starting live intake orchestration..." });
@@ -478,6 +499,7 @@ window.acquireVsCodeApi = function(){
     const aiGeneratedDataUrl = `${window.location.origin}/ai-generated-data`;
     const apiExplorerUrl = `${window.location.origin}/api-explorer`;
     const preflightError = String(response?.chain?.parsed?.preflightError || "").trim();
+    const scenarioMode = String(response?.chain?.parsed?.scenarioMode || intake?.scenarioMode || "quick").toLowerCase() === "extensive" ? "extensive" : "quick";
     const mockCoverageOk = Boolean(response?.chain?.parsed?.mockCoverageOk);
     const attachedMockCount = Number(response?.chain?.parsed?.attachedMockCount ?? 0);
 
@@ -488,6 +510,7 @@ window.acquireVsCodeApi = function(){
       successCount,
       failureCount,
       intakeMode: mode,
+      scenarioMode,
       allowFake: false
     });
     postToWebview("summary", { status: "Running", detail: "Executing FlowTest chain..." });

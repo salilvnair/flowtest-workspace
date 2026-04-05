@@ -49,4 +49,5 @@ export type StartIntakePayload = {
   additionalInfo?: string;
   multiUpload?: boolean;
   fakeRun?: boolean;
+  scenarioMode?: "quick" | "extensive";
 };

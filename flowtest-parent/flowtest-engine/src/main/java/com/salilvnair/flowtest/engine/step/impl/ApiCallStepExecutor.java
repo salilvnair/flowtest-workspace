@@ -1,6 +1,7 @@
 package com.salilvnair.flowtest.engine.step.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.salilvnair.flowtest.engine.dsl.model.AssertionDefinition;
 import com.salilvnair.flowtest.engine.dsl.model.ScenarioStep;
 import com.salilvnair.flowtest.engine.execution.ExecutionContext;
 import com.salilvnair.flowtest.engine.execution.StepRunResult;
@@ -16,7 +17,10 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Component
@@ -97,20 +101,38 @@ public class ApiCallStepExecutor implements StepExecutor {
             result.setSuccess(true);
             return result;
         } catch (RestClientResponseException re) {
-            result.setSuccess(false);
-            result.setErrorMessage(re.getMessage());
             Map<String, Object> output = new LinkedHashMap<>();
             Map<String, Object> request = step.getRequest() == null ? Map.of() : step.getRequest();
             String method = String.valueOf(request.getOrDefault("method", ""));
             String rawUrl = String.valueOf(request.getOrDefault("url", ""));
             String url = resolveUrl(rawUrl, context);
             Object requestBody = extractRequestBodyExample(request);
+            int actualStatus = re.getStatusCode() == null ? 0 : re.getStatusCode().value();
             output.put("method", method);
             output.put("url", url);
             output.put("requestBody", requestBody == null ? Map.of() : requestBody);
-            output.put("status", re.getStatusCode() == null ? 0 : re.getStatusCode().value());
+            output.put("status", actualStatus);
             output.put("responseBody", re.getResponseBodyAsString());
             output.put("headers", re.getResponseHeaders() == null ? Map.of() : re.getResponseHeaders().toSingleValueMap());
+
+            // api-call is execution-only: capture HTTP outcome and continue.
+            // Assertions should be done in api-assert steps.
+            if ("api-call".equals(step.getType())) {
+                context.putStepOutput(step.getId(), output);
+                result.setOutput(output);
+                result.setSuccess(true);
+                return result;
+            }
+
+            if (isExpectedHttpStatus(step, request, actualStatus)) {
+                context.putStepOutput(step.getId(), output);
+                result.setOutput(output);
+                result.setSuccess(true);
+                return result;
+            }
+
+            result.setSuccess(false);
+            result.setErrorMessage(re.getMessage());
             result.setOutput(output);
             return result;
         } catch (Exception e) {
@@ -213,5 +235,78 @@ public class ApiCallStepExecutor implements StepExecutor {
             return s;
         }
         return value;
+    }
+
+    private boolean isExpectedHttpStatus(ScenarioStep step, Map<String, Object> request, int actualStatus) {
+        Set<String> expectedSpecs = new LinkedHashSet<>();
+        collectExpectedStatusSpecs(expectedSpecs, request == null ? null : request.get("expectedStatus"));
+        collectExpectedStatusSpecs(expectedSpecs, request == null ? null : request.get("expectedStatusCode"));
+        collectExpectedStatusSpecs(expectedSpecs, request == null ? null : request.get("expectedHttpStatus"));
+        collectExpectedStatusSpecs(expectedSpecs, request == null ? null : request.get("expectedStatuses"));
+        collectExpectedStatusSpecs(expectedSpecs, request == null ? null : request.get("expectedStatusCodes"));
+        collectExpectedStatusSpecs(expectedSpecs, request == null ? null : request.get("_flowtestMockStatus"));
+
+        List<AssertionDefinition> assertions = step == null ? null : step.getAssertions();
+        if (assertions != null) {
+            for (AssertionDefinition assertion : assertions) {
+                if (assertion == null) continue;
+                String type = String.valueOf(assertion.getType() == null ? "" : assertion.getType()).toLowerCase();
+                String path = String.valueOf(assertion.getPath() == null ? "" : assertion.getPath()).toLowerCase();
+                boolean statusAssertion = type.contains("status")
+                        || "status".equals(path)
+                        || "$.statusCode".equals(path)
+                        || "statusCode".equals(path);
+                if (statusAssertion) {
+                    collectExpectedStatusSpecs(expectedSpecs, assertion.getExpected());
+                }
+            }
+        }
+
+        if (expectedSpecs.isEmpty()) return false;
+        for (String spec : expectedSpecs) {
+            if (matchesStatusSpec(spec, actualStatus)) return true;
+        }
+        return false;
+    }
+
+    private void collectExpectedStatusSpecs(Set<String> out, Object value) {
+        if (out == null || value == null) return;
+        if (value instanceof Number n) {
+            out.add(String.valueOf(n.intValue()));
+            return;
+        }
+        if (value instanceof String s) {
+            String t = s.trim();
+            if (t.isBlank()) return;
+            if (t.contains(",")) {
+                for (String part : t.split(",")) {
+                    String p = part.trim();
+                    if (!p.isBlank()) out.add(p);
+                }
+                return;
+            }
+            out.add(t);
+            return;
+        }
+        if (value instanceof List<?> list) {
+            for (Object item : list) {
+                collectExpectedStatusSpecs(out, item);
+            }
+        }
+    }
+
+    private boolean matchesStatusSpec(String spec, int status) {
+        if (spec == null) return false;
+        String s = spec.trim().toLowerCase();
+        if (s.isBlank()) return false;
+        if (s.matches("[1-5]xx")) {
+            int bucket = Character.digit(s.charAt(0), 10);
+            return status >= bucket * 100 && status < (bucket + 1) * 100;
+        }
+        try {
+            return Integer.parseInt(s) == status;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 }

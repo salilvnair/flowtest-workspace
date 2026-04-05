@@ -24,6 +24,13 @@ function getModel(provider: "openai" | "lmstudio"): string {
   return String(process.env.OPENAI_MODEL ?? "gpt-5.4-mini");
 }
 
+function resolveScenarioMode(raw: unknown): "quick" | "extensive" {
+  const input = String(raw ?? "").trim().toLowerCase();
+  const env = String(process.env.FLOWTEST_SCENARIO_MODE ?? "").trim().toLowerCase();
+  const v = input || env;
+  return v === "extensive" ? "extensive" : "quick";
+}
+
 function normalizeEventPayload(input: any): any {
   const stage = String(input?.stage ?? "");
   const status = String(input?.status ?? "");
@@ -150,6 +157,20 @@ function hhmmss(d: Date): string {
   return `${h}:${m}:${s}`;
 }
 
+function toErrorMeta(error: any, extra?: Record<string, unknown>): Record<string, unknown> {
+  const message = String(error?.message || error || "unknown error");
+  const name = String(error?.name || "Error");
+  const cause = String((error as any)?.cause?.message || (error as any)?.cause || "").trim();
+  const stack = String(error?.stack || "").trim();
+  return {
+    error_name: name,
+    error_message: message,
+    error_cause: cause || "-",
+    error_stack: stack ? stack.slice(0, 3000) : "-",
+    ...(extra || {})
+  };
+}
+
 export async function POST(req: Request) {
   let payload: StartIntakePayload | null = null;
   try {
@@ -174,6 +195,7 @@ export async function POST(req: Request) {
           const runName = String(payload?.runName || "flowtest-run");
           const outputPath = String(payload?.outputPath || "").trim() || "-";
           const mode = payload?.multiUpload ? "multi upload" : "row mode";
+          const scenarioMode = resolveScenarioMode((payload as any)?.scenarioMode);
           const orchestrationId = crypto.randomUUID();
           const temporalBase = "http://localhost:8233/namespaces/default/workflows";
           const provider = getProvider();
@@ -191,11 +213,12 @@ export async function POST(req: Request) {
               successCount,
               failureCount,
               intakeMode: mode,
+              scenarioMode,
               allowFake: false
             }
           });
           sendSummary("Running", "Executing FlowTest chain...");
-          sendEvent({ stage: "RUN", status: "running", title: "Started", meta: { run_name: runName, orchestration_id: orchestrationId, intake_mode: mode } });
+          sendEvent({ stage: "RUN", status: "running", title: "Started", meta: { run_name: runName, orchestration_id: orchestrationId, intake_mode: mode, scenario_mode: scenarioMode } });
           sendEvent({ stage: "UI", status: "info", title: "Status Panel Initialized", meta: { renderer: "nextjs-webview", theme: "vscode-ported", follow_logs_default: true } });
           sendEvent({
             stage: "Intake",
@@ -205,6 +228,7 @@ export async function POST(req: Request) {
               run_name: runName,
               output_path: outputPath,
               intake_mode: mode,
+              scenario_mode: scenarioMode,
               success_samples: successCount,
               failure_samples: failureCount
             }
@@ -247,9 +271,6 @@ export async function POST(req: Request) {
           });
 
           const chain = await runIntakePromptChain(payload!, async (ev) => {
-            if (ev.title === "Ai Request Dispatched") {
-              return;
-            }
             sendEvent(ev);
             if (ev.stage === "API Spec" && ev.title === "Ai Response Received") {
               sendEvent({ stage: "UI", status: "info", title: "Api Spec Section Rendered" });
@@ -335,12 +356,39 @@ export async function POST(req: Request) {
                 detail: `${idx + 1}/${scenarioList.length} ${scenarioId}`,
                 meta: { scenario_index: idx + 1, scenario_total: scenarioList.length, scenario_id: scenarioId }
               });
-              const upstream = await fetch(`${ENGINE_BASE_URL}/api/scenarios/run-temporal`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ scenario: scenarioItem })
-              });
-              const body = await upstream.text();
+              let upstream: Response;
+              let body = "";
+              try {
+                upstream = await fetch(`${ENGINE_BASE_URL}/api/scenarios/run-temporal`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ scenario: scenarioItem })
+                });
+                body = await upstream.text();
+              } catch (fetchError: any) {
+                engineRuns.push({
+                  ok: false,
+                  status: 0,
+                  body: "",
+                  workflowId: undefined,
+                  runId: undefined,
+                  scenarioId,
+                  fetchError: String(fetchError?.message || fetchError || "fetch failed")
+                });
+                sendEvent({
+                  stage: "Engine Run",
+                  status: "error",
+                  title: "Request Failed",
+                  detail: String(fetchError?.message || fetchError || "fetch failed"),
+                  meta: toErrorMeta(fetchError, {
+                    engine_url: `${ENGINE_BASE_URL}/api/scenarios/run-temporal`,
+                    scenario_id: scenarioId,
+                    scenario_index: idx + 1,
+                    scenario_total: scenarioList.length
+                  })
+                });
+                continue;
+              }
               let workflowId = "";
               let runId = "";
               try {
@@ -526,6 +574,7 @@ export async function POST(req: Request) {
             wiremockBaseUrl: String(chain.parsed.wiremockBaseUrl || "-"),
             allureResultsPath: String(chain.parsed.allureResultsPath || "-"),
             allureReportPath: String(chain.parsed.allureReportPath || "-"),
+            scenarioMode: String(chain.parsed.scenarioMode || scenarioMode),
             wiremockOpenApiUrl: wiremockOpenApiUrl || `${ENGINE_BASE_URL.replace(/\/+$/, "")}/api/scenarios/wiremock/openapi`,
             wiremockAdminMappingsUrl: wiremockAdminMappingsUrl || `${ENGINE_BASE_URL.replace(/\/+$/, "")}/api/scenarios/wiremock/mappings`,
             aiGeneratedDataUrl: `${new URL(req.url).origin}/ai-generated-data`,
@@ -552,6 +601,7 @@ export async function POST(req: Request) {
               scenario_total: Number(engine?.totalRuns ?? scenarioList.length),
               scenario_passed: Number(engine?.passedRuns ?? 0),
               scenario_failed: Number(engine?.failedRuns ?? 0),
+              scenario_mode: String(chain.parsed?.scenarioMode || scenarioMode),
               preflight_error: preflightError || "-",
               wiremock_base_url: String(chain.parsed.wiremockBaseUrl || "-")
             }
@@ -559,7 +609,16 @@ export async function POST(req: Request) {
           send({ type: "final", payload: response });
           controller.close();
         } catch (error: any) {
-          send({ type: "error", payload: { message: String(error?.message || error || "Streaming run failed") } });
+          const msg = String(error?.message || error || "Streaming run failed");
+          sendEvent({
+            stage: "RUN",
+            status: "error",
+            title: "Failed",
+            detail: msg,
+            meta: toErrorMeta(error)
+          });
+          sendSummary("Failed", msg);
+          send({ type: "error", payload: { message: msg, meta: toErrorMeta(error) } });
           controller.close();
         }
       })();

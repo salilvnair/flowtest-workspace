@@ -34,9 +34,12 @@ export type IntakeChainResult = {
   parsed: {
     scenarioJson: Record<string, unknown> | null;
     scenariosJson?: Array<Record<string, unknown>>;
+    apiCoverageMatrix?: Array<Record<string, unknown>>;
+    coverageError?: string | null;
     wiremockMockCount: number;
     attachedMockCount?: number;
     mockCoverageOk?: boolean;
+    scenarioMode?: "quick" | "extensive";
     preflightError?: string | null;
     wiremockBaseUrl?: string | null;
     allureResultsPath?: string | null;
@@ -56,6 +59,17 @@ export type IntakeProgressEvent = {
 
 export type IntakeProgressHandler = (event: IntakeProgressEvent) => void | Promise<void>;
 
+type ScenarioMode = "quick" | "extensive";
+type ScenarioProfile = {
+  mode: ScenarioMode;
+  minPerApi: number;
+  maxPerApi: number;
+  successPerApiHint: number;
+  failurePerApiHint: number;
+  apisPerCall: number;
+  scenarioTimeoutMs: number;
+};
+
 function getProvider(): "openai" | "lmstudio" {
   const provider = String(process.env.FLOWTEST_LLM_PROVIDER ?? "openai").toLowerCase();
   return provider === "lmstudio" ? "lmstudio" : "openai";
@@ -65,7 +79,7 @@ function getModel(provider: "openai" | "lmstudio"): string {
   if (provider === "lmstudio") {
     return String(process.env.LMSTUDIO_MODEL ?? "local-model");
   }
-  return String(process.env.OPENAI_MODEL ?? "gpt-5.4-mini");
+  return String(process.env.OPENAI_MODEL ?? "gpt-5.2");
 }
 
 function getEndpoint(provider: "openai" | "lmstudio"): string {
@@ -76,8 +90,54 @@ function getEndpoint(provider: "openai" | "lmstudio"): string {
 }
 
 function getTimeoutMs(): number {
-  const n = Number(process.env.FLOWTEST_AI_TIMEOUT_MS ?? "120000");
-  return Number.isFinite(n) ? Math.max(15000, n) : 120000;
+  const n = Number(process.env.FLOWTEST_AI_TIMEOUT_MS ?? "90000");
+  return Number.isFinite(n) ? Math.max(15000, n) : 90000;
+}
+
+function getAiMaxRetries(): number {
+  const n = Number(process.env.FLOWTEST_AI_MAX_RETRIES ?? "2");
+  if (!Number.isFinite(n)) return 2;
+  return Math.max(0, Math.min(5, Math.trunc(n)));
+}
+
+function getDefaultApisPerScenarioCall(): number {
+  const n = Number(process.env.FLOWTEST_SCENARIO_APIS_PER_CALL ?? "2");
+  if (!Number.isFinite(n)) return 2;
+  return Math.max(1, Math.min(10, Math.trunc(n)));
+}
+
+function resolveScenarioMode(intake: StartIntakePayload): ScenarioMode {
+  const explicit = String((intake as any)?.scenarioMode || "").trim().toLowerCase();
+  if (explicit === "quick" || explicit === "extensive") return explicit as ScenarioMode;
+  const envMode = String(process.env.FLOWTEST_SCENARIO_MODE ?? "").trim().toLowerCase();
+  if (envMode === "quick" || envMode === "extensive") return envMode as ScenarioMode;
+  return "quick";
+}
+
+function getScenarioProfile(mode: ScenarioMode): ScenarioProfile {
+  const defaultApisPerCall = getDefaultApisPerScenarioCall();
+  if (mode === "extensive") {
+    const timeout = Number(process.env.FLOWTEST_SCENARIO_TIMEOUT_EXTENSIVE_MS ?? "600000");
+    return {
+      mode,
+      minPerApi: 6,
+      maxPerApi: 6,
+      successPerApiHint: 3,
+      failurePerApiHint: 3,
+      apisPerCall: Math.max(1, Math.min(6, defaultApisPerCall)),
+      scenarioTimeoutMs: Number.isFinite(timeout) ? Math.max(30000, timeout) : 600000
+    };
+  }
+  const timeout = Number(process.env.FLOWTEST_SCENARIO_TIMEOUT_QUICK_MS ?? "300000");
+  return {
+    mode,
+    minPerApi: 2,
+    maxPerApi: 2,
+    successPerApiHint: 1,
+    failurePerApiHint: 1,
+    apisPerCall: Math.max(1, Math.min(10, defaultApisPerCall)),
+    scenarioTimeoutMs: Number.isFinite(timeout) ? Math.max(15000, timeout) : 300000
+  };
 }
 
 function buildSystemPrompt(taskType: AiTaskType): string {
@@ -116,6 +176,27 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
   }
 }
 
+function isRetryableStatus(code: number): boolean {
+  return code === 408 || code === 409 || code === 425 || code === 429 || (code >= 500 && code <= 599);
+}
+
+function isRetryableError(err: unknown): boolean {
+  const name = String((err as any)?.name || "");
+  const msg = String((err as any)?.message || err || "").toLowerCase();
+  if (name === "AiTimeoutError" || name === "AbortError") return true;
+  return msg.includes("fetch failed")
+    || msg.includes("other side closed")
+    || msg.includes("socket hang up")
+    || msg.includes("econnreset")
+    || msg.includes("etimedout")
+    || msg.includes("timeout")
+    || msg.includes("network");
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function extractChatText(json: any): string {
   const msg = json?.choices?.[0]?.message?.content;
   if (typeof msg === "string") return msg.trim();
@@ -128,11 +209,18 @@ function extractChatText(json: any): string {
   return JSON.stringify(json);
 }
 
-export async function executeAiTaskDetailed(taskType: AiTaskType, prompt: string): Promise<AiExecutionDetails> {
+export async function executeAiTaskDetailed(
+  taskType: AiTaskType,
+  prompt: string,
+  options?: { timeoutMs?: number; maxRetries?: number }
+): Promise<AiExecutionDetails> {
   const provider = getProvider();
   const endpoint = getEndpoint(provider);
   const model = getModel(provider);
-  const timeoutMs = getTimeoutMs();
+  const timeoutMs = Number.isFinite(options?.timeoutMs as number) ? Math.max(15000, Number(options?.timeoutMs)) : getTimeoutMs();
+  const maxRetries = Number.isFinite(options?.maxRetries as number)
+    ? Math.max(0, Math.min(5, Math.trunc(Number(options?.maxRetries))))
+    : getAiMaxRetries();
   const calledAt = new Date().toISOString();
   const startedMs = Date.now();
   const systemPrompt = buildSystemPrompt(taskType);
@@ -157,19 +245,42 @@ export async function executeAiTaskDetailed(taskType: AiTaskType, prompt: string
     headers.Authorization = `Bearer ${key}`;
   }
 
-  const response = await fetchWithTimeout(
-    endpoint,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify(requestPayload)
-    },
-    timeoutMs
-  );
+  let response: Response | null = null;
+  let raw = "";
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      response = await fetchWithTimeout(
+        endpoint,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestPayload)
+        },
+        timeoutMs
+      );
+      raw = await response.text();
+      if (!response.ok) {
+        if (attempt < maxRetries && isRetryableStatus(response.status)) {
+          await waitMs(400 * (attempt + 1));
+          continue;
+        }
+        throw new Error(`LLM request failed (${response.status}): ${raw}`);
+      }
+      break;
+    } catch (error: unknown) {
+      lastError = error;
+      if (attempt < maxRetries && isRetryableError(error)) {
+        await waitMs(400 * (attempt + 1));
+        continue;
+      }
+      throw error;
+    }
+  }
 
-  const raw = await response.text();
-  if (!response.ok) {
-    throw new Error(`LLM request failed (${response.status}): ${raw}`);
+  if (!response || !response.ok) {
+    const fallback = String((lastError as any)?.message || lastError || "LLM request failed");
+    throw new Error(fallback);
   }
 
   let parsed: any = null;
@@ -249,6 +360,27 @@ function extractJsonValue(text: string): unknown {
   try {
     return JSON.parse(raw);
   } catch {
+    // keep trying: extract first JSON object block
+    const firstObj = raw.indexOf("{");
+    const lastObj = raw.lastIndexOf("}");
+    if (firstObj >= 0 && lastObj > firstObj) {
+      try {
+        return JSON.parse(raw.slice(firstObj, lastObj + 1));
+      } catch {
+        // ignore
+      }
+    }
+
+    // or first JSON array block
+    const firstArr = raw.indexOf("[");
+    const lastArr = raw.lastIndexOf("]");
+    if (firstArr >= 0 && lastArr > firstArr) {
+      try {
+        return JSON.parse(raw.slice(firstArr, lastArr + 1));
+      } catch {
+        // ignore
+      }
+    }
     return null;
   }
 }
@@ -256,6 +388,15 @@ function extractJsonValue(text: string): unknown {
 function normalizeScenarioSuite(value: unknown): Array<Record<string, unknown>> {
   const asObject = (v: unknown): Record<string, unknown> | null =>
     v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+  if (Array.isArray(value)) {
+    const out: Array<Record<string, unknown>> = [];
+    for (const raw of value as Array<unknown>) {
+      const obj = asObject(raw);
+      if (obj) out.push(obj);
+    }
+    return out;
+  }
 
   const rootObj = asObject(value);
   if (!rootObj) return [];
@@ -270,6 +411,134 @@ function normalizeScenarioSuite(value: unknown): Array<Record<string, unknown>> 
   }
 
   return [rootObj];
+}
+
+function normalizePath(raw: unknown): string {
+  const s = String(raw ?? "").trim();
+  if (!s) return "/";
+  const cleaned = s.replace(/\{\{\s*baseUrl\s*\}\}/gi, "").trim();
+  if (!cleaned) return "/";
+  try {
+    const u = new URL(cleaned.startsWith("http://") || cleaned.startsWith("https://") ? cleaned : `http://dummy${cleaned.startsWith("/") ? "" : "/"}${cleaned}`);
+    return (u.pathname || "/").trim() || "/";
+  } catch {
+    const q = cleaned.indexOf("?");
+    const p = q >= 0 ? cleaned.slice(0, q) : cleaned;
+    return p.startsWith("/") ? p : `/${p}`;
+  }
+}
+
+function isFailureScenario(scenario: Record<string, unknown>): boolean {
+  const id = String((scenario as any).scenarioId ?? "").toLowerCase();
+  const name = String((scenario as any).name ?? "").toLowerCase();
+  const tags = Array.isArray((scenario as any).tags) ? (scenario as any).tags.map((t: unknown) => String(t).toLowerCase()).join(" ") : "";
+  const text = `${id} ${name} ${tags}`;
+  return /(negative|fail|failure|error|invalid|reject|rejected|conflict|mismatch|missing|blocked|timeout|duplicate)/.test(text);
+}
+
+function isSuccessScenario(scenario: Record<string, unknown>): boolean {
+  const id = String((scenario as any).scenarioId ?? "").toLowerCase();
+  const name = String((scenario as any).name ?? "").toLowerCase();
+  const tags = Array.isArray((scenario as any).tags) ? (scenario as any).tags.map((t: unknown) => String(t).toLowerCase()).join(" ") : "";
+  const text = `${id} ${name} ${tags}`;
+  return /(happy|success|positive|valid|pass)/.test(text);
+}
+
+function computeApiCoverageMatrix(
+  apiSpecValue: unknown,
+  scenarios: Array<Record<string, unknown>>,
+  rangeMin: number,
+  rangeMax: number
+): {
+  matrix: Array<Record<string, unknown>>;
+  missingFailure: string[];
+  missingSuccess: string[];
+  outOfRange: string[];
+} {
+  const apis = Array.isArray((apiSpecValue as any)?.apis) ? ((apiSpecValue as any).apis as Array<any>) : [];
+  const targets = apis
+    .filter((a) => a && typeof a === "object")
+    .map((a, i) => ({
+      apiId: String(a.apiId || `api-${i + 1}`),
+      method: String(a.method || "POST").toUpperCase(),
+      path: normalizePath(a.path || "/")
+    }));
+
+  const byKey = new Map<string, {
+    apiId: string;
+    method: string;
+    path: string;
+    scenarios: Set<string>;
+    successScenarios: Set<string>;
+    failureScenarios: Set<string>;
+  }>();
+
+  for (const t of targets) {
+    const key = `${t.method} ${t.path}`;
+    byKey.set(key, {
+      ...t,
+      scenarios: new Set<string>(),
+      successScenarios: new Set<string>(),
+      failureScenarios: new Set<string>()
+    });
+  }
+
+  for (let i = 0; i < scenarios.length; i++) {
+    const scenario = scenarios[i];
+    const sid = String((scenario as any).scenarioId || `scenario-${i + 1}`);
+    const steps = Array.isArray((scenario as any).steps) ? (scenario as any).steps as Array<any> : [];
+    const failLike = isFailureScenario(scenario);
+    const successLike = isSuccessScenario(scenario) || !failLike;
+    const seenInScenario = new Set<string>();
+
+    for (const step of steps) {
+      if (!step || typeof step !== "object") continue;
+      const type = String((step as any).type || "");
+      if (type !== "api-call" && type !== "api-assert") continue;
+      const req = (step as any).request;
+      if (!req || typeof req !== "object") continue;
+      const method = String((req as any).method || "POST").toUpperCase();
+      const path = normalizePath((req as any).url || "/");
+      const key = `${method} ${path}`;
+      if (byKey.has(key)) seenInScenario.add(key);
+    }
+
+    for (const key of seenInScenario) {
+      const row = byKey.get(key);
+      if (!row) continue;
+      row.scenarios.add(sid);
+      if (failLike) row.failureScenarios.add(sid);
+      if (successLike) row.successScenarios.add(sid);
+    }
+  }
+
+  const matrix: Array<Record<string, unknown>> = [];
+  const missingFailure: string[] = [];
+  const missingSuccess: string[] = [];
+  const outOfRange: string[] = [];
+
+  for (const row of byKey.values()) {
+    const total = row.scenarios.size;
+    const successCount = row.successScenarios.size;
+    const failureCount = row.failureScenarios.size;
+    const key = `${row.method} ${row.path}`;
+    if (failureCount === 0) missingFailure.push(key);
+    if (successCount === 0) missingSuccess.push(key);
+    if (total < rangeMin || total > rangeMax) {
+      outOfRange.push(`${key} (${total})`);
+    }
+    matrix.push({
+      apiId: row.apiId,
+      method: row.method,
+      path: row.path,
+      totalScenarios: total,
+      successScenarios: successCount,
+      failureScenarios: failureCount,
+      scenarioIds: Array.from(row.scenarios)
+    });
+  }
+
+  return { matrix, missingFailure, missingSuccess, outOfRange };
 }
 
 function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> {
@@ -385,14 +654,215 @@ function attachInferredMocksToScenario(
   return attached;
 }
 
+function normalizeMethod(raw: unknown): string {
+  const m = String(raw ?? "").trim().toUpperCase();
+  return m || "POST";
+}
+
+function isNonEmptyObject(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v) && Object.keys(v as Record<string, unknown>).length > 0;
+}
+
+function readRequestBodyFromReq(req: Record<string, unknown>): unknown {
+  const direct = (req as any).requestBody ?? (req as any).jsonBody ?? (req as any).body ?? (req as any).payload;
+  if (direct == null) return null;
+  if (typeof direct === "string") {
+    const t = direct.trim();
+    if (!t) return null;
+    try {
+      return JSON.parse(t);
+    } catch {
+      return t;
+    }
+  }
+  return direct;
+}
+
+function writeRequestBodyToReq(req: Record<string, unknown>, body: unknown): void {
+  if (body == null) return;
+  (req as any).requestBody = body;
+  if ((req as any).jsonBody === undefined) (req as any).jsonBody = body;
+}
+
+function repairApiAssertStepsInScenario(scenario: Record<string, unknown>): number {
+  const steps = Array.isArray((scenario as any).steps) ? ((scenario as any).steps as Array<any>) : [];
+  if (steps.length === 0) return 0;
+  let repaired = 0;
+  const latestBodyByKey = new Map<string, unknown>();
+
+  for (const step of steps) {
+    if (!step || typeof step !== "object") continue;
+    const type = String((step as any).type || "").trim();
+    const req = (step as any).request;
+    if (!req || typeof req !== "object") continue;
+
+    const method = normalizeMethod((req as any).method);
+    const path = normalizePath((req as any).url || "/");
+    const key = `${method} ${path}`;
+    const body = readRequestBodyFromReq(req as Record<string, unknown>);
+
+    if (type === "api-call" && body != null && (!(typeof body === "object") || isNonEmptyObject(body))) {
+      latestBodyByKey.set(key, body);
+      continue;
+    }
+
+    if (type !== "api-assert") continue;
+
+    const hasBody = body != null && (!(typeof body === "object") || isNonEmptyObject(body));
+    if (!hasBody) {
+      const fallback = latestBodyByKey.get(key);
+      if (fallback != null) {
+        writeRequestBodyToReq(req as Record<string, unknown>, fallback);
+        repaired++;
+      }
+    }
+
+    if ((req as any).expectedStatus === undefined && (req as any)._flowtestMockStatus !== undefined) {
+      (req as any).expectedStatus = (req as any)._flowtestMockStatus;
+    }
+  }
+  return repaired;
+}
+
+function sampleFromSchema(schema: any): any {
+  if (!schema || typeof schema !== "object") return null;
+  if (Array.isArray(schema.enum) && schema.enum.length > 0) return schema.enum[0];
+  const t = String(schema.type || "");
+  if (t === "string") return "sample";
+  if (t === "number" || t === "integer") return 0;
+  if (t === "boolean") return true;
+  if (t === "array") return [sampleFromSchema(schema.items)];
+  if (t === "object" || schema.properties) {
+    const out: Record<string, unknown> = {};
+    const props = schema.properties && typeof schema.properties === "object" ? schema.properties : {};
+    for (const [k, v] of Object.entries(props)) out[k] = sampleFromSchema(v);
+    return out;
+  }
+  return null;
+}
+
+function buildApiRequestSamples(apiSpecValue: unknown): Map<string, unknown> {
+  const out = new Map<string, unknown>();
+  const apis = Array.isArray((apiSpecValue as any)?.apis) ? ((apiSpecValue as any).apis as Array<any>) : [];
+  for (const api of apis) {
+    if (!api || typeof api !== "object") continue;
+    const method = normalizeMethod(api.method);
+    const path = normalizePath(api.path || "/");
+    const key = `${method} ${path}`;
+    const reqSchema =
+      (api.request && typeof api.request === "object" ? api.request : null) ||
+      (api.requestSchema && typeof api.requestSchema === "object" ? api.requestSchema : null);
+    if (!reqSchema) continue;
+    const sample = sampleFromSchema(reqSchema);
+    if (sample != null) out.set(key, sample);
+  }
+  return out;
+}
+
+function ensureJsonHeader(req: Record<string, unknown>): boolean {
+  const rawHeaders = (req as any).headers;
+  const headers: Record<string, unknown> =
+    rawHeaders && typeof rawHeaders === "object" && !Array.isArray(rawHeaders)
+      ? (rawHeaders as Record<string, unknown>)
+      : {};
+  const had = Object.keys(headers).some((k) => k.toLowerCase() === "content-type");
+  if (!had) {
+    headers["Content-Type"] = "application/json";
+    (req as any).headers = headers;
+    return true;
+  }
+  return false;
+}
+
+function sanitizeScenarioSteps(
+  scenario: Record<string, unknown>,
+  apiSamples: Map<string, unknown>
+): { repairedBodies: number; addedHeaders: number; addedExpectedStatuses: number } {
+  const steps = Array.isArray((scenario as any).steps) ? ((scenario as any).steps as Array<any>) : [];
+  const failLike = isFailureScenario(scenario);
+  const seenBodies = new Map<string, unknown>();
+  let repairedBodies = 0;
+  let addedHeaders = 0;
+  let addedExpectedStatuses = 0;
+
+  for (const step of steps) {
+    if (!step || typeof step !== "object") continue;
+    const type = String((step as any).type || "");
+    if (type !== "api-call" && type !== "api-assert") continue;
+    const req = ((step as any).request && typeof (step as any).request === "object")
+      ? ((step as any).request as Record<string, unknown>)
+      : ({} as Record<string, unknown>);
+    (step as any).request = req;
+
+    const method = normalizeMethod((req as any).method);
+    const path = normalizePath((req as any).url || "/");
+    (req as any).method = method;
+    (req as any).url = path;
+    const key = `${method} ${path}`;
+
+    let body = readRequestBodyFromReq(req);
+    if (body == null || (typeof body === "object" && !Array.isArray(body) && !isNonEmptyObject(body))) {
+      const fallback = seenBodies.get(key) ?? apiSamples.get(key) ?? null;
+      if (fallback != null) {
+        writeRequestBodyToReq(req, fallback);
+        body = fallback;
+        repairedBodies++;
+      }
+    }
+    if (body != null && (!(typeof body === "object") || isNonEmptyObject(body))) {
+      seenBodies.set(key, body);
+      if (ensureJsonHeader(req)) addedHeaders++;
+    }
+
+    const hasExpected = (req as any).expectedStatus !== undefined
+      || (req as any).expectedStatusCode !== undefined
+      || (req as any).expectedStatuses !== undefined;
+    if (!hasExpected) {
+      (req as any).expectedStatus = failLike ? "4xx" : "2xx";
+      addedExpectedStatuses++;
+    }
+  }
+
+  repairedBodies += repairApiAssertStepsInScenario(scenario);
+  return { repairedBodies, addedHeaders, addedExpectedStatuses };
+}
+
 export async function runIntakePromptChain(
   intake: StartIntakePayload,
   onProgress?: IntakeProgressHandler
 ): Promise<IntakeChainResult> {
+  const scenarioMode = resolveScenarioMode(intake);
+  const scenarioProfile = getScenarioProfile(scenarioMode);
+  const llmTimeoutMs = scenarioProfile.scenarioTimeoutMs;
+  const llmMaxRetries = Math.max(2, getAiMaxRetries());
   const docsText = buildDocsText(intake);
   const addon = additionalInfoAddon(intake);
   const provider = getProvider();
   const model = getModel(provider);
+  const llmEndpoint = getEndpoint(provider);
+
+  const buildDispatchAction = (taskType: AiTaskType, prompt: string) => ({
+    label: "AI Request",
+    title: `${taskType} - AI Request`,
+    content: JSON.stringify(
+      {
+        provider,
+        model,
+        llm_endpoint: llmEndpoint,
+        taskType,
+        requestPayload: {
+          model,
+          messages: [
+            { role: "system", content: buildSystemPrompt(taskType) },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.2
+        }
+      },
+      null,
+      2
+    )
+  });
 
   const apiSpecPrompt =
     [
@@ -452,10 +922,16 @@ export async function runIntakePromptChain(
       task: "GENERATE_API_SPEC",
       provider,
       model,
-      called_at: apiSpecStartedAt
-    }
+      called_at: apiSpecStartedAt,
+      timeout_ms: llmTimeoutMs,
+      max_retries: llmMaxRetries
+    },
+    actions: [buildDispatchAction("GENERATE_API_SPEC", apiSpecPrompt)]
   });
-  const apiSpec = await executeAiTaskDetailed("GENERATE_API_SPEC", apiSpecPrompt);
+  const apiSpec = await executeAiTaskDetailed("GENERATE_API_SPEC", apiSpecPrompt, {
+    timeoutMs: llmTimeoutMs,
+    maxRetries: llmMaxRetries
+  });
   await onProgress?.({
     stage: "API Spec",
     status: "success",
@@ -525,10 +1001,16 @@ export async function runIntakePromptChain(
       task: "GENERATE_MOCKS",
       provider,
       model,
-      called_at: wiremockStartedAt
-    }
+      called_at: wiremockStartedAt,
+      timeout_ms: llmTimeoutMs,
+      max_retries: llmMaxRetries
+    },
+    actions: [buildDispatchAction("GENERATE_MOCKS", wiremockPrompt)]
   });
-  const wiremock = await executeAiTaskDetailed("GENERATE_MOCKS", wiremockPrompt);
+  const wiremock = await executeAiTaskDetailed("GENERATE_MOCKS", wiremockPrompt, {
+    timeoutMs: llmTimeoutMs,
+    maxRetries: llmMaxRetries
+  });
   await onProgress?.({
     stage: "WireMock",
     status: "success",
@@ -551,13 +1033,17 @@ export async function runIntakePromptChain(
     "REQUIRED OUTPUT RULES:",
     "1) Return ONLY one JSON object (no markdown).",
     "2) Top-level keys MUST be: dslVersion, flowName, scenarios.",
-    "3) scenarios MUST be an array with 5 to 6 scenario objects.",
+    "3) scenarios MUST be an array with comprehensive scenario set.",
     "4) Each scenario MUST include: scenarioId, name, tags, steps.",
     "5) steps MUST be an array of objects with: id, type, request.",
     "6) type MUST be one of: api-call, api-assert, log, set-context, sleep.",
     "7) For api-call/api-assert each step request MUST include method and url.",
     "8) Scenario set MUST include: 1 happy path + multiple negative/edge paths based on failure docs.",
-    "9) Keep request/response expectations deterministic and testable."
+    `9) FOR EACH API endpoint in the API spec, create ${scenarioProfile.minPerApi} to ${scenarioProfile.maxPerApi} scenarios that cover that endpoint across success and failure conditions.`,
+    "10) Ensure every API has at least one success and one failure scenario.",
+    `11) Target distribution per API: about ${scenarioProfile.successPerApiHint} success and ${scenarioProfile.failurePerApiHint} failure scenarios.`,
+    "12) Reuse realistic payload variations from samples so failures are triggerable.",
+    "13) Keep request/response expectations deterministic and testable."
   ].join("\n");
   const scenarioPrompt =
     "Generate FlowTest DSL scenario JSON using the below artifacts.\n\n" +
@@ -568,46 +1054,214 @@ export async function runIntakePromptChain(
     "\n\nMock Plan:\n" +
     wiremock.responseText +
     addon;
+  const parseOrRepairScenarioSuite = async (rawText: string, contextLabel: string): Promise<Array<Record<string, unknown>>> => {
+    let parsedValue = extractJsonValue(rawText);
+    let suite = normalizeScenarioSuite(parsedValue);
+    if (suite.length > 0) return suite;
+
+    await onProgress?.({
+      stage: "Scenario DSL",
+      status: "warn",
+      title: "Json Repair Attempt",
+      detail: `${contextLabel}: repairing non-JSON scenario output`
+    });
+    const repairPrompt = [
+      "Convert the following content into strict JSON only.",
+      "Return exactly one JSON object with keys: dslVersion, flowName, scenarios.",
+      "scenarios must be an array of scenario objects with scenarioId, name, tags, steps.",
+      "Each step must include id, type, request; for api-call/api-assert include request.method and request.url.",
+      "Do not include markdown or comments.",
+      "",
+      "CONTENT TO REPAIR:",
+      rawText
+    ].join("\n");
+    const repaired = await executeAiTaskDetailed("GENERATE_SCENARIO", repairPrompt, {
+      timeoutMs: llmTimeoutMs,
+      maxRetries: llmMaxRetries
+    });
+    parsedValue = extractJsonValue(String(repaired.responseText || ""));
+    suite = normalizeScenarioSuite(parsedValue);
+    await onProgress?.({
+      stage: "Scenario DSL",
+      status: suite.length > 0 ? "success" : "error",
+      title: suite.length > 0 ? "Json Repair Succeeded" : "Json Repair Failed",
+      detail: suite.length > 0 ? `${contextLabel}: scenarios=${suite.length}` : `${contextLabel}: could not recover valid JSON`
+    });
+    return suite;
+  };
+
+  const apiSpecParsedForScenarios = extractJsonValue(apiSpec.responseText);
+  const apiList = Array.isArray((apiSpecParsedForScenarios as any)?.apis)
+    ? ((apiSpecParsedForScenarios as any).apis as Array<Record<string, unknown>>)
+    : [];
+  const apisPerCall = scenarioProfile.apisPerCall;
+  const useChunkedScenarioDsl = scenarioProfile.mode === "extensive";
+
   await onProgress?.({
     stage: "Scenario DSL",
-    status: "running",
-    title: "Ai Request Dispatched",
-    detail: "task=GENERATE_SCENARIO",
+    status: "info",
+    title: "Api Inventory",
+    detail: `api_count=${apiList.length} mode=${scenarioProfile.mode} strategy=${useChunkedScenarioDsl ? "chunked" : "single"} apis_per_call=${apisPerCall}`,
     meta: {
-      task: "GENERATE_SCENARIO",
-      provider,
-      model,
-      called_at: new Date().toISOString()
+      api_count: apiList.length,
+      scenario_mode: scenarioProfile.mode,
+      strategy: useChunkedScenarioDsl ? "chunked" : "single",
+      apis_per_call: apisPerCall,
+      scenarios_per_api_min: scenarioProfile.minPerApi,
+      scenarios_per_api_max: scenarioProfile.maxPerApi
     }
   });
-  const scenario = await executeAiTaskDetailed("GENERATE_SCENARIO", scenarioPrompt);
-  await onProgress?.({
-    stage: "Scenario DSL",
-    status: "success",
-    title: "Ai Response Received",
-    detail: `${String(scenario.responseText || "").length} chars`,
-    meta: {
-      provider: scenario.provider,
-      model: scenario.model,
-      called_at: scenario.calledAt,
-      completed_at: scenario.completedAt,
-      duration_ms: scenario.durationMs
-    },
-    actions: [
-      { label: "AI Request", title: "Scenario DSL - AI Request", content: JSON.stringify(scenario.requestPayload, null, 2) },
-      { label: "AI Response", title: "Scenario DSL - AI Response", content: String(scenario.responseText || "") }
-    ]
-  });
 
-  const scenarioValue = extractJsonValue(scenario.responseText);
-  const scenariosJson = normalizeScenarioSuite(scenarioValue);
-  const scenarioJson = scenariosJson.length > 0 ? scenariosJson[0] : null;
+  let scenario = await executeAiTaskDetailed("GENERATE_SCENARIO", scenarioPrompt, {
+    timeoutMs: llmTimeoutMs,
+    maxRetries: llmMaxRetries
+  });
+  let scenariosJson: Array<Record<string, unknown>> = [];
+  let scenarioRawText = "";
+
+  if (apiList.length > 0 && useChunkedScenarioDsl) {
+    const merged: Array<Record<string, unknown>> = [];
+    let fallbackTrace: typeof scenario | null = null;
+    const apiChunks: Array<Array<Record<string, unknown>>> = [];
+    for (let i = 0; i < apiList.length; i += apisPerCall) {
+      apiChunks.push(apiList.slice(i, i + apisPerCall));
+    }
+    for (let i = 0; i < apiChunks.length; i++) {
+      const chunk = apiChunks[i] || [];
+      const endpointLabel = chunk
+        .map((a) => `${String((a as any).method || "POST").toUpperCase()} ${String((a as any).path || "/")}`)
+        .join(" | ");
+      const perApiPrompt = [
+        "Generate FlowTest DSL scenarios for a subset of API endpoints.",
+        "",
+        strictSchemaHint,
+        "13) Generate scenarios ONLY for the endpoint list below.",
+        `14) For EACH listed endpoint, generate ${scenarioProfile.minPerApi}-${scenarioProfile.maxPerApi} scenarios with at least one success and one failure.`,
+        "",
+        "FULL API UNDERSTANDING:",
+        String(apiSpec.responseText || ""),
+        "",
+        "TARGET API NODES:",
+        JSON.stringify(chunk, null, 2),
+        "",
+        "WIREMOCK PLAN:",
+        String(wiremock.responseText || ""),
+        addon
+      ].join("\n");
+
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "running",
+        title: "Ai Request Dispatched",
+        detail: `task=GENERATE_SCENARIO chunk=${i + 1}/${apiChunks.length}`,
+        meta: {
+          task: "GENERATE_SCENARIO",
+          provider,
+          model,
+          chunk_index: i + 1,
+          chunk_total: apiChunks.length,
+          chunk_api_count: chunk.length,
+          endpoints: endpointLabel,
+          called_at: new Date().toISOString(),
+          timeout_ms: llmTimeoutMs,
+          max_retries: llmMaxRetries
+        },
+        actions: [buildDispatchAction("GENERATE_SCENARIO", perApiPrompt)]
+      });
+
+      const perApiScenario = await executeAiTaskDetailed("GENERATE_SCENARIO", perApiPrompt, {
+        timeoutMs: llmTimeoutMs,
+        maxRetries: llmMaxRetries
+      });
+      fallbackTrace = perApiScenario;
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "success",
+        title: "Ai Response Received",
+        detail: `chunk=${i + 1}/${apiChunks.length} ${String(perApiScenario.responseText || "").length} chars`,
+        meta: {
+          provider: perApiScenario.provider,
+          model: perApiScenario.model,
+          called_at: perApiScenario.calledAt,
+          completed_at: perApiScenario.completedAt,
+          duration_ms: perApiScenario.durationMs,
+          chunk_index: i + 1,
+          chunk_total: apiChunks.length,
+          chunk_api_count: chunk.length,
+          endpoints: endpointLabel
+        },
+        actions: [
+          { label: "AI Request", title: `Scenario DSL - AI Request (chunk ${i + 1})`, content: JSON.stringify(perApiScenario.requestPayload, null, 2) },
+          { label: "AI Response", title: `Scenario DSL - AI Response (chunk ${i + 1})`, content: String(perApiScenario.responseText || "") }
+        ]
+      });
+
+      const oneSuite = await parseOrRepairScenarioSuite(String(perApiScenario.responseText || ""), `chunk ${i + 1}`);
+      merged.push(...oneSuite);
+    }
+
+    const seen = new Set<string>();
+    scenariosJson = merged.filter((s, i) => {
+      const sid = String((s as any).scenarioId || `scenario-${i + 1}`);
+      if (seen.has(sid)) return false;
+      seen.add(sid);
+      return true;
+    });
+    scenarioRawText = JSON.stringify(
+      { dslVersion: "1.0", flowName: String(intake.runName || "flowtest"), scenarios: scenariosJson },
+      null,
+      2
+    );
+    if (fallbackTrace) scenario = fallbackTrace;
+  } else {
+    await onProgress?.({
+      stage: "Scenario DSL",
+      status: "running",
+      title: "Ai Request Dispatched",
+      detail: "task=GENERATE_SCENARIO",
+      meta: {
+        task: "GENERATE_SCENARIO",
+        provider,
+        model,
+        called_at: new Date().toISOString(),
+        timeout_ms: llmTimeoutMs,
+        max_retries: llmMaxRetries
+      },
+      actions: [buildDispatchAction("GENERATE_SCENARIO", scenarioPrompt)]
+    });
+    scenario = await executeAiTaskDetailed("GENERATE_SCENARIO", scenarioPrompt, {
+      timeoutMs: llmTimeoutMs,
+      maxRetries: llmMaxRetries
+    });
+    await onProgress?.({
+      stage: "Scenario DSL",
+      status: "success",
+      title: "Ai Response Received",
+      detail: `${String(scenario.responseText || "").length} chars`,
+      meta: {
+        provider: scenario.provider,
+        model: scenario.model,
+        called_at: scenario.calledAt,
+        completed_at: scenario.completedAt,
+        duration_ms: scenario.durationMs
+      },
+      actions: [
+        { label: "AI Request", title: "Scenario DSL - AI Request", content: JSON.stringify(scenario.requestPayload, null, 2) },
+        { label: "AI Response", title: "Scenario DSL - AI Response", content: String(scenario.responseText || "") }
+      ]
+    });
+    scenarioRawText = String(scenario.responseText || "");
+    scenariosJson = await parseOrRepairScenarioSuite(scenarioRawText, "combined");
+  }
+  let scenarioJson = scenariosJson.length > 0 ? scenariosJson[0] : null;
   const wiremockJson = extractJsonValue(wiremock.responseText);
   const normalizedMocks = normalizeWiremockMocks(wiremockJson);
   const effectiveMocks = normalizedMocks;
   let attachedMockCount = 0;
   let mockCoverageOk = false;
   let preflightError: string | null = null;
+  let apiCoverageMatrix: Array<Record<string, unknown>> = [];
+  let coverageError: string | null = null;
 
   if (!scenarioJson || scenariosJson.length === 0) {
     preflightError = "Scenario output was not valid JSON";
@@ -618,14 +1272,103 @@ export async function runIntakePromptChain(
       detail: preflightError
     });
   } else {
+    const apiSpecParsed = extractJsonValue(apiSpec.responseText);
+    const apiRequestSamples = buildApiRequestSamples(apiSpecParsed);
+    let repairedBodies = 0;
+    let addedHeaders = 0;
+    let addedExpectedStatuses = 0;
+    for (const sc of scenariosJson) {
+      const fixed = sanitizeScenarioSteps(sc, apiRequestSamples);
+      repairedBodies += fixed.repairedBodies;
+      addedHeaders += fixed.addedHeaders;
+      addedExpectedStatuses += fixed.addedExpectedStatuses;
+    }
+    await onProgress?.({
+      stage: "Scenario DSL",
+      status: "info",
+      title: "Step Sanitizer",
+      detail: `repaired_bodies=${repairedBodies} added_headers=${addedHeaders} added_expected_status=${addedExpectedStatuses}`,
+      meta: {
+        repaired_bodies: repairedBodies,
+        added_headers: addedHeaders,
+        added_expected_status: addedExpectedStatuses
+      }
+    });
+
+    const coverageIssuesText = (c: ReturnType<typeof computeApiCoverageMatrix>): string => {
+      const issues: string[] = [];
+      if (c.missingFailure.length > 0) issues.push(`APIs missing failure coverage: ${c.missingFailure.join(", ")}`);
+      if (c.missingSuccess.length > 0) issues.push(`APIs missing success coverage: ${c.missingSuccess.join(", ")}`);
+      if (c.outOfRange.length > 0) {
+        issues.push(`APIs outside ${scenarioProfile.minPerApi}-${scenarioProfile.maxPerApi} scenario range: ${c.outOfRange.join(", ")}`);
+      }
+      return issues.join(" | ");
+    };
+
+    // Try to improve scenario coverage automatically, but do not hard-fail if still below target.
+    const maxCoverageRetries = 2;
+    let coverage = computeApiCoverageMatrix(apiSpecParsed, scenariosJson, scenarioProfile.minPerApi, scenarioProfile.maxPerApi);
+    for (let attempt = 1; attempt <= maxCoverageRetries; attempt++) {
+      const issuesText = coverageIssuesText(coverage);
+      if (!issuesText) break;
+
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "warn",
+        title: "Coverage Retry",
+        detail: `attempt=${attempt}/${maxCoverageRetries} ${issuesText}`,
+        meta: {
+          attempt,
+          max_attempts: maxCoverageRetries,
+          api_count: coverage.matrix.length,
+          missing_failure_count: coverage.missingFailure.length,
+          missing_success_count: coverage.missingSuccess.length,
+          out_of_range_count: coverage.outOfRange.length
+        }
+      });
+
+      const retryPrompt =
+        [
+          "Regenerate FlowTest scenario suite JSON only.",
+          "Keep output format: { dslVersion, flowName, scenarios: [] }.",
+          `Goal: improve API coverage for each endpoint with ${scenarioProfile.minPerApi}-${scenarioProfile.maxPerApi} scenarios per API, including success and failure.`,
+          "Do not include markdown.",
+          "",
+          "API SPEC:",
+          String(apiSpec.responseText || ""),
+          "",
+          "WIREMOCK MAPPINGS:",
+          String(wiremock.responseText || ""),
+          "",
+          "CURRENT SCENARIOS (improve this):",
+          JSON.stringify({ dslVersion: "1.0", flowName: String(intake.runName || "flowtest"), scenarios: scenariosJson }, null, 2),
+          "",
+          "COVERAGE GAPS TO FIX:",
+          issuesText
+        ].join("\n");
+
+      const retry = await executeAiTaskDetailed("GENERATE_SCENARIO", retryPrompt, {
+        timeoutMs: llmTimeoutMs,
+        maxRetries: llmMaxRetries
+      });
+      const retryScenarios = normalizeScenarioSuite(extractJsonValue(retry.responseText));
+      if (retryScenarios.length > 0) {
+        scenariosJson = retryScenarios;
+        scenarioJson = scenariosJson[0] || null;
+        coverage = computeApiCoverageMatrix(apiSpecParsed, scenariosJson, scenarioProfile.minPerApi, scenarioProfile.maxPerApi);
+      } else {
+        break;
+      }
+    }
+
     let attachedTotal = 0;
     let coverageMocks = 0;
     let coverageInline = 0;
     for (const sc of scenariosJson) {
       attachedTotal += attachInferredMocksToScenario(sc, effectiveMocks);
-      const coverage = countScenarioMockCoverage(sc);
-      coverageMocks += coverage.mocks;
-      coverageInline += coverage.inline;
+      const m = countScenarioMockCoverage(sc);
+      coverageMocks += m.mocks;
+      coverageInline += m.inline;
     }
     attachedMockCount = attachedTotal;
     mockCoverageOk = coverageMocks > 0 || coverageInline > 0;
@@ -656,6 +1399,47 @@ export async function runIntakePromptChain(
         }
       });
     }
+
+    coverage = computeApiCoverageMatrix(apiSpecParsed, scenariosJson, scenarioProfile.minPerApi, scenarioProfile.maxPerApi);
+    apiCoverageMatrix = coverage.matrix;
+    const finalCoverageIssues = coverageIssuesText(coverage);
+    if (finalCoverageIssues) {
+      coverageError = finalCoverageIssues;
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "warn",
+        title: "Coverage Matrix",
+        detail: `Proceeding with available scenarios: ${finalCoverageIssues}`,
+        meta: {
+          api_count: coverage.matrix.length,
+          missing_failure_count: coverage.missingFailure.length,
+          missing_success_count: coverage.missingSuccess.length,
+          out_of_range_count: coverage.outOfRange.length
+        },
+        actions: [
+          {
+            label: "Coverage Matrix",
+            title: "API Coverage Matrix",
+            content: JSON.stringify(coverage.matrix, null, 2)
+          }
+        ]
+      });
+    } else {
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "success",
+        title: "Coverage Matrix",
+        detail: `api_count=${coverage.matrix.length} all APIs have success+failure and ${scenarioProfile.minPerApi}-${scenarioProfile.maxPerApi} scenarios`,
+        meta: { api_count: coverage.matrix.length },
+        actions: [
+          {
+            label: "Coverage Matrix",
+            title: "API Coverage Matrix",
+            content: JSON.stringify(coverage.matrix, null, 2)
+          }
+        ]
+      });
+    }
   }
 
   return {
@@ -677,9 +1461,12 @@ export async function runIntakePromptChain(
     parsed: {
       scenarioJson,
       scenariosJson,
+      apiCoverageMatrix,
+      coverageError,
       wiremockMockCount: effectiveMocks.length,
       attachedMockCount,
       mockCoverageOk,
+      scenarioMode: scenarioProfile.mode,
       preflightError
     }
   };

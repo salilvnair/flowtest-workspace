@@ -8,6 +8,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class OpenAiProperties {
     private boolean enabled;
     private String apiKey;
-    private String model = "gpt-5.4-mini";
+    private String model = "gpt-5.2";
     private String endpoint = "https://api.openai.com/v1/responses";
 }
