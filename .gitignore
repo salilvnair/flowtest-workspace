@@ -20,6 +20,7 @@ pnpm-debug.log*
 # FlowTest generated artifacts
 flowtest-parent/allure-results/
 flowtest-parent/allure-report/
+**/.flowtest-cache/
 
 # VS Code extension build output
 flowtest-copilot-extension/dist/

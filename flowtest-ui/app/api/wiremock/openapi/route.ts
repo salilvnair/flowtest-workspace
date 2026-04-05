@@ -177,6 +177,35 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
   const merged: JsonMap = { ...runtimeSpec };
   const mergedPaths: JsonMap = { ...(runtimeSpec.paths || {}) };
   const methods = ["get", "post", "put", "patch", "delete", "options", "head"];
+  const mergeMedia = (runMedia: any, genMedia: any): any => {
+    const r = runMedia && typeof runMedia === "object" ? runMedia : {};
+    const g = genMedia && typeof genMedia === "object" ? genMedia : {};
+    return {
+      ...g,
+      ...r,
+      schema: r.schema || g.schema,
+      example: r.example || g.example,
+      examples: (r.examples && Object.keys(r.examples).length > 0) ? r.examples : g.examples
+    };
+  };
+
+  const mergeResponseObj = (runRespRaw: any, genRespRaw: any): any => {
+    const r = runRespRaw && typeof runRespRaw === "object" ? runRespRaw : {};
+    const g = genRespRaw && typeof genRespRaw === "object" ? genRespRaw : {};
+    const runContent = r.content && typeof r.content === "object" ? r.content : {};
+    const genContent = g.content && typeof g.content === "object" ? g.content : {};
+    const contentTypes = new Set([...Object.keys(genContent), ...Object.keys(runContent)]);
+    const outContent: JsonMap = {};
+    for (const ct of contentTypes) {
+      outContent[ct] = mergeMedia(runContent[ct], genContent[ct]);
+    }
+    return {
+      ...g,
+      ...r,
+      description: String(r.description || g.description || "Response"),
+      content: outContent
+    };
+  };
 
   for (const [pathKey, genPathNodeRaw] of Object.entries(generatedSpec.paths || {})) {
     const genPathNode = (genPathNodeRaw && typeof genPathNodeRaw === "object") ? (genPathNodeRaw as JsonMap) : {};
@@ -195,10 +224,12 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
       }
       if (!runOp) continue;
 
-      const runResponses: JsonMap = (runOp.responses && typeof runOp.responses === "object") ? { ...runOp.responses } : {};
+      const runResponses: JsonMap = (runOp.responses && typeof runOp.responses === "object") ? runOp.responses : {};
       const genResponses: JsonMap = (genOp?.responses && typeof genOp.responses === "object") ? genOp.responses : {};
-      for (const [statusCode, genResp] of Object.entries(genResponses)) {
-        if (!runResponses[statusCode]) runResponses[statusCode] = genResp;
+      const mergedResponses: JsonMap = {};
+      const statusCodes = new Set([...Object.keys(genResponses), ...Object.keys(runResponses)]);
+      for (const statusCode of statusCodes) {
+        mergedResponses[statusCode] = mergeResponseObj(runResponses[statusCode], genResponses[statusCode]);
       }
 
       pathOut[method] = {
@@ -206,7 +237,7 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
         ...runOp,
         requestBody: runOp.requestBody || genOp?.requestBody,
         parameters: (Array.isArray(runOp.parameters) && runOp.parameters.length > 0) ? runOp.parameters : genOp?.parameters,
-        responses: runResponses
+        responses: mergedResponses
       };
     }
 
