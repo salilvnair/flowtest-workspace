@@ -189,6 +189,24 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
     };
   };
 
+  const mergeRequestBody = (runReqRaw: any, genReqRaw: any): any => {
+    const r = runReqRaw && typeof runReqRaw === "object" ? runReqRaw : {};
+    const g = genReqRaw && typeof genReqRaw === "object" ? genReqRaw : {};
+    const runContent = r.content && typeof r.content === "object" ? r.content : {};
+    const genContent = g.content && typeof g.content === "object" ? g.content : {};
+    const contentTypes = new Set([...Object.keys(genContent), ...Object.keys(runContent)]);
+    const outContent: JsonMap = {};
+    for (const ct of contentTypes) {
+      outContent[ct] = mergeMedia(runContent[ct], genContent[ct]);
+    }
+    return {
+      ...g,
+      ...r,
+      required: Boolean(r.required ?? g.required),
+      content: outContent
+    };
+  };
+
   const mergeResponseObj = (runRespRaw: any, genRespRaw: any): any => {
     const r = runRespRaw && typeof runRespRaw === "object" ? runRespRaw : {};
     const g = genRespRaw && typeof genRespRaw === "object" ? genRespRaw : {};
@@ -235,7 +253,7 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
       pathOut[method] = {
         ...genOp,
         ...runOp,
-        requestBody: runOp.requestBody || genOp?.requestBody,
+        requestBody: mergeRequestBody(runOp.requestBody, genOp?.requestBody),
         parameters: (Array.isArray(runOp.parameters) && runOp.parameters.length > 0) ? runOp.parameters : genOp?.parameters,
         responses: mergedResponses
       };
@@ -245,10 +263,12 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
   }
 
   merged.paths = mergedPaths;
+  const generatedTitle = String(generatedSpec?.info?.title || "").trim();
+  const runtimeTitle = String(runtimeSpec?.info?.title || "").trim();
   merged.info = {
     ...(generatedSpec?.info && typeof generatedSpec.info === "object" ? generatedSpec.info : {}),
     ...(runtimeSpec?.info && typeof runtimeSpec.info === "object" ? runtimeSpec.info : {}),
-    title: "FlowTest API Explorer",
+    title: generatedTitle || runtimeTitle || "FlowTest API Explorer",
     description: "Merged Runtime WireMock + Generated API Spec (success and failure responses)"
   };
   if (!merged.components && generatedSpec.components) merged.components = generatedSpec.components;

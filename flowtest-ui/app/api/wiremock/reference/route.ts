@@ -19,7 +19,7 @@ export const GET = ApiReference({
     }
   ],
   theme: "purple",
-  layout: "classic",
+  layout: "modern",
   darkMode: true,
   proxyUrl: "/api/wiremock/proxy",
   hideDownloadButton: false,

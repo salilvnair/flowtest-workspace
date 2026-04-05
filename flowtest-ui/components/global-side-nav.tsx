@@ -30,6 +30,7 @@ const RUNTIME_LINKS: NavItem[] = [
 export function GlobalSideNav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const storageKey = "flowtest-ui:side-nav-open";
 
   const isActive = useMemo(() => {
     return (href: string) => {
@@ -45,8 +46,21 @@ export function GlobalSideNav() {
   }, [open]);
 
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+    try {
+      const raw = window.sessionStorage.getItem(storageKey);
+      setOpen(raw === "1");
+    } catch {
+      // ignore
+    }
+  }, [storageKey]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(storageKey, open ? "1" : "0");
+    } catch {
+      // ignore
+    }
+  }, [open, storageKey]);
 
   return (
     <>
