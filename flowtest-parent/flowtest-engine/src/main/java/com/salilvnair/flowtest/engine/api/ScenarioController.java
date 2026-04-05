@@ -8,12 +8,14 @@ import com.salilvnair.flowtest.engine.temporal.TemporalScenarioOrchestrator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 @RestController
@@ -85,6 +87,43 @@ public class ScenarioController {
                     "message", ex.getMessage() == null ? "Temporal execution error" : ex.getMessage()
             ));
         }
+    }
+
+    @GetMapping("/wiremock/mappings")
+    public ResponseEntity<?> wiremockMappings() {
+        Map<String, Object> snapshot = scenarioEngine.getLastWireMockSnapshot();
+        Object mappings = snapshot.get("mappings");
+        return ResponseEntity.ok(Map.of(
+                "enabled", snapshot.getOrDefault("enabled", false),
+                "scenarioId", snapshot.getOrDefault("scenarioId", ""),
+                "baseUrl", snapshot.getOrDefault("baseUrl", ""),
+                "adminMappingsUrl", snapshot.getOrDefault("adminMappingsUrl", ""),
+                "stubCount", snapshot.getOrDefault("stubCount", 0),
+                "mappings", mappings == null ? List.of() : mappings
+        ));
+    }
+
+    @GetMapping("/wiremock/openapi")
+    public ResponseEntity<?> wiremockOpenapi() {
+        Map<String, Object> snapshot = scenarioEngine.getLastWireMockSnapshot();
+        Object openapi = snapshot.get("openapi");
+        if (!(openapi instanceof Map<?, ?> map)) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "error", "WIREMOCK_OPENAPI_NOT_AVAILABLE",
+                    "message", snapshot.getOrDefault("message", "Run a scenario with WireMock stubs first")
+            ));
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) map;
+        return ResponseEntity.ok(body);
+    }
+
+    @GetMapping("/wiremock/swagger-url")
+    public ResponseEntity<?> wiremockSwaggerUrl() {
+        return ResponseEntity.ok(Map.of(
+                "swaggerUrl", "/api/scenarios/wiremock/openapi",
+                "swaggerUiHint", "Use Swagger UI with url=/api/scenarios/wiremock/openapi"
+        ));
     }
 
     private String validateScenario(TestScenario scenario) {

@@ -859,7 +859,7 @@
       const s = String(stage || '').toLowerCase().trim();
       if (s === 'api spec' || s === 'wiremock' || s === 'scenario dsl') return { cls: 'llm', text: 'LLM' };
       if (s === 'engine run') return { cls: 'java', text: 'Java' };
-      return { cls: 'vscode', text: 'VS Code Copilot' };
+      return { cls: 'vscode', text: 'FlowTest' };
     }
     function stageCls(stage) {
       return String(stage || '').toLowerCase().replace(/\s+/g, '-');
@@ -927,7 +927,19 @@
       }
       var lastRowLabel = document.getElementById('lastRowLabel');
       var statusLabel = document.getElementById('statusLabel');
-      const meta = { runName: '-', orchestrationId: '-', temporalLink: '-', outputPath: '-', wiremockBaseUrl: '-', allureResultsPath: '-', allureReportPath: '-' };
+      const meta = {
+        runName: '-',
+        orchestrationId: '-',
+        temporalLink: '-',
+        outputPath: '-',
+        wiremockBaseUrl: '-',
+        allureResultsPath: '-',
+        allureReportPath: '-',
+        wiremockOpenApiUrl: '-',
+        wiremockAdminMappingsUrl: '-',
+        aiGeneratedDataUrl: '-',
+        apiExplorerUrl: '-'
+      };
 
       function syncChevronState(btn, isCollapsed) {
         if (!btn) return;
@@ -1013,12 +1025,24 @@
         if (runMetaDockGrid) {
           const temporal = String(meta.temporalLink || '-');
           const temporalView = temporal !== '-' ? '<a href="#" data-open-url="' + esc(temporal) + '">' + esc(temporal) + '</a>' : '<span class="runMetaDockValText">-</span>';
+          const wiremockOpenApiUrl = String(meta.wiremockOpenApiUrl || '-');
+          const wiremockOpenApiView = wiremockOpenApiUrl !== '-' ? '<a href="#" data-open-url="' + esc(wiremockOpenApiUrl) + '">' + esc(wiremockOpenApiUrl) + '</a>' : '<span class="runMetaDockValText">-</span>';
+          const wiremockAdminMappingsUrl = String(meta.wiremockAdminMappingsUrl || '-');
+          const wiremockAdminMappingsView = wiremockAdminMappingsUrl !== '-' ? '<a href="#" data-open-url="' + esc(wiremockAdminMappingsUrl) + '">' + esc(wiremockAdminMappingsUrl) + '</a>' : '<span class="runMetaDockValText">-</span>';
+          const aiGeneratedDataUrl = String(meta.aiGeneratedDataUrl || '-');
+          const aiGeneratedDataView = aiGeneratedDataUrl !== '-' ? '<a href="#" data-open-url="' + esc(aiGeneratedDataUrl) + '">' + esc(aiGeneratedDataUrl) + '</a>' : '<span class="runMetaDockValText">-</span>';
+          const apiExplorerUrl = String(meta.apiExplorerUrl || '-');
+          const apiExplorerView = apiExplorerUrl !== '-' ? '<a href="#" data-open-url="' + esc(apiExplorerUrl) + '">' + esc(apiExplorerUrl) + '</a>' : '<span class="runMetaDockValText">-</span>';
           runMetaDockGrid.innerHTML =
             '<div class="runMetaDockItem"><div class="runMetaDockKey">Temporal</div><div class="runMetaDockVal">' + temporalView + metaCopyButton(temporal) + '</div></div>'
             + '<div class="runMetaDockItem"><div class="runMetaDockKey">Output Path</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.outputPath || '-') + '</span>' + metaCopyButton(meta.outputPath) + '</div></div>'
             + '<div class="runMetaDockItem"><div class="runMetaDockKey">WireMock Base URL</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.wiremockBaseUrl || '-') + '</span>' + metaCopyButton(meta.wiremockBaseUrl) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">WireMock OpenAPI</div><div class="runMetaDockVal">' + wiremockOpenApiView + metaCopyButton(wiremockOpenApiUrl) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">WireMock Admin Mappings</div><div class="runMetaDockVal">' + wiremockAdminMappingsView + metaCopyButton(wiremockAdminMappingsUrl) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">API Explorer</div><div class="runMetaDockVal">' + apiExplorerView + metaCopyButton(apiExplorerUrl) + '</div></div>'
             + '<div class="runMetaDockItem"><div class="runMetaDockKey">Allure Results</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.allureResultsPath || '-') + '</span>' + metaCopyButton(meta.allureResultsPath) + '</div></div>'
-            + '<div class="runMetaDockItem"><div class="runMetaDockKey">Allure Report</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.allureReportPath || '-') + '</span>' + metaCopyButton(meta.allureReportPath) + '</div></div>';
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">Allure Report</div><div class="runMetaDockVal"><span class="runMetaDockValText">' + esc(meta.allureReportPath || '-') + '</span>' + metaCopyButton(meta.allureReportPath) + '</div></div>'
+            + '<div class="runMetaDockItem"><div class="runMetaDockKey">AI Generated Data</div><div class="runMetaDockVal">' + aiGeneratedDataView + metaCopyButton(aiGeneratedDataUrl) + '</div></div>';
         }
       }
       function setSummary(status, detail) {
@@ -1783,6 +1807,10 @@
           meta.wiremockBaseUrl = p.wiremockBaseUrl || 'pending (engine will publish base URL)';
           meta.allureResultsPath = '-';
           meta.allureReportPath = '-';
+          meta.wiremockOpenApiUrl = p.wiremockOpenApiUrl || '-';
+          meta.wiremockAdminMappingsUrl = p.wiremockAdminMappingsUrl || '-';
+          meta.aiGeneratedDataUrl = p.aiGeneratedDataUrl || '-';
+          meta.apiExplorerUrl = p.apiExplorerUrl || '-';
           renderMeta();
           if (successCount) successCount.textContent = String(p.successCount ?? 0);
           if (failureCount) failureCount.textContent = String(p.failureCount ?? 0);
@@ -1800,6 +1828,10 @@
           if (p.wiremockBaseUrl) meta.wiremockBaseUrl = p.wiremockBaseUrl;
           if (p.allureResultsPath) meta.allureResultsPath = p.allureResultsPath;
           if (p.allureReportPath) meta.allureReportPath = p.allureReportPath;
+          if (p.wiremockOpenApiUrl) meta.wiremockOpenApiUrl = p.wiremockOpenApiUrl;
+          if (p.wiremockAdminMappingsUrl) meta.wiremockAdminMappingsUrl = p.wiremockAdminMappingsUrl;
+          if (p.aiGeneratedDataUrl) meta.aiGeneratedDataUrl = p.aiGeneratedDataUrl;
+          if (p.apiExplorerUrl) meta.apiExplorerUrl = p.apiExplorerUrl;
           renderMeta();
         } else if (msg.type === 'event') {
           addEvent(msg.payload || {});

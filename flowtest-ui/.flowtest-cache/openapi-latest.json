@@ -1,0 +1,708 @@
+{
+  "project": "Zapper Electricity Disconnect - Simulation",
+  "normalizedSpecVersion": "1.0",
+  "basePath": "/",
+  "apis": [
+    {
+      "apiId": "API1",
+      "name": "AddressValidation",
+      "method": "POST",
+      "path": "/address/validate",
+      "syncAsync": "SYNC",
+      "slaSeconds": 2,
+      "purpose": "Validate customer site addresses",
+      "request": {
+        "requiredFields": [
+          "customerType",
+          "customerName",
+          "requestType",
+          "sites[].siteId",
+          "sites[].state",
+          "sites[].city",
+          "sites[].zip",
+          "sites[].addressLine1"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "customerType",
+            "customerName",
+            "requestType",
+            "sites"
+          ],
+          "properties": {
+            "customerType": {
+              "type": "string",
+              "enum": [
+                "ENTERPRISE"
+              ]
+            },
+            "customerName": {
+              "type": "string"
+            },
+            "requestType": {
+              "type": "string",
+              "enum": [
+                "DISCONNECT"
+              ]
+            },
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "siteId",
+                  "state",
+                  "city",
+                  "zip",
+                  "addressLine1"
+                ],
+                "properties": {
+                  "siteId": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "zip": {
+                    "type": "string"
+                  },
+                  "addressLine1": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "VALIDATED",
+            "validatedSites": [
+              {
+                "siteId": "string",
+                "isValid": true,
+                "normalizedAddress": "string"
+              }
+            ]
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 400,
+            "body": {
+              "status": "REJECTED",
+              "errorCode": "ADDR_MISMATCH",
+              "message": "Address mismatch for one or more sites",
+              "validatedSites": [
+                {
+                  "siteId": "string",
+                  "isValid": true,
+                  "normalizedAddress": "string"
+                },
+                {
+                  "siteId": "string",
+                  "isValid": false,
+                  "reason": "ZIP_CITY_STATE_MISMATCH",
+                  "normalizedAddress": "string"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API2",
+      "name": "InventoryValidation",
+      "method": "POST",
+      "path": "/inventory/validate",
+      "syncAsync": "SYNC",
+      "slaSeconds": 2,
+      "purpose": "Validate transformer and connection existence",
+      "request": {
+        "requiredFields": [
+          "sites[].siteId",
+          "sites[].transformerId",
+          "sites[].connectionId"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "sites"
+          ],
+          "properties": {
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "siteId",
+                  "transformerId",
+                  "connectionId"
+                ],
+                "properties": {
+                  "siteId": {
+                    "type": "string"
+                  },
+                  "transformerId": {
+                    "type": "string"
+                  },
+                  "connectionId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "OK",
+            "inventoryChecks": [
+              {
+                "siteId": "string",
+                "transformerExists": true,
+                "connectionExists": true,
+                "feeder": "string"
+              }
+            ]
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 404,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "INVENTORY_ASSET_NOT_FOUND",
+              "inventoryChecks": [
+                {
+                  "siteId": "string",
+                  "transformerExists": true,
+                  "connectionExists": false,
+                  "missingField": "connectionId",
+                  "providedConnectionId": "string"
+                },
+                {
+                  "siteId": "string",
+                  "transformerExists": false,
+                  "connectionExists": true,
+                  "missingField": "transformerId",
+                  "providedTransformerId": "string"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API3",
+      "name": "GetPendingBills",
+      "method": "POST",
+      "path": "/billing/pending",
+      "syncAsync": "SYNC",
+      "slaSeconds": 3,
+      "purpose": "Check pending bills before disconnect",
+      "request": {
+        "requiredFields": [
+          "customerAccountId",
+          "sites[].siteId",
+          "sites[].connectionId"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "customerAccountId",
+            "sites"
+          ],
+          "properties": {
+            "customerAccountId": {
+              "type": "string"
+            },
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "siteId",
+                  "connectionId"
+                ],
+                "properties": {
+                  "siteId": {
+                    "type": "string"
+                  },
+                  "connectionId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "CLEAR",
+            "pendingBills": [
+              {
+                "siteId": "string",
+                "amount": 0,
+                "currency": "USD"
+              }
+            ]
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 409,
+            "body": {
+              "status": "BLOCKED",
+              "errorCode": "PENDING_BILLS_FOUND",
+              "pendingBills": [
+                {
+                  "siteId": "string",
+                  "amount": 0,
+                  "currency": "USD",
+                  "agingDays": 0
+                }
+              ],
+              "actionRequired": "CLEAR_DUES_BEFORE_DISCONNECT"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API4",
+      "name": "SubmitDisconnectRequest",
+      "method": "POST",
+      "path": "/disconnect/submit",
+      "syncAsync": "SYNC",
+      "slaSeconds": 4,
+      "purpose": "Submit disconnect request and receive tracking ids",
+      "request": {
+        "requiredFields": [
+          "requestType",
+          "requestedBy",
+          "sites[].siteId",
+          "sites[].connectionId",
+          "sites[].transformerId"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "requestType",
+            "requestedBy",
+            "sites"
+          ],
+          "properties": {
+            "requestType": {
+              "type": "string",
+              "enum": [
+                "DISCONNECT"
+              ]
+            },
+            "requestedBy": {
+              "type": "string"
+            },
+            "sites": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "siteId",
+                  "connectionId",
+                  "transformerId"
+                ],
+                "properties": {
+                  "siteId": {
+                    "type": "string"
+                  },
+                  "connectionId": {
+                    "type": "string"
+                  },
+                  "transformerId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 202,
+          "body": {
+            "status": "ACCEPTED",
+            "transactionId": "string",
+            "correlationId": "string",
+            "estimatedCompletionMinutes": 0
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 409,
+            "body": {
+              "status": "CONFLICT",
+              "errorCode": "DUPLICATE_DISCONNECT_REQUEST",
+              "message": "An active disconnect request already exists for one or more sites",
+              "existingTransactionId": "string",
+              "existingCorrelationId": "string",
+              "retryAfterSeconds": 0
+            }
+          },
+          {
+            "statusCode": 422,
+            "body": {
+              "status": "REJECTED",
+              "errorCode": "PRECHECK_FAILED",
+              "message": "Disconnect request rejected due to unresolved pre-check failures",
+              "failedChecks": [
+                "address_validation",
+                "pending_bills"
+              ],
+              "transactionId": null,
+              "correlationId": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API5",
+      "name": "DisconnectOrderCallback",
+      "method": "POST",
+      "path": "/callbacks/disconnect-order",
+      "syncAsync": "ASYNC",
+      "slaSeconds": 30,
+      "purpose": "Async callback with disconnect order number",
+      "request": {
+        "requiredFields": [
+          "eventType",
+          "transactionId",
+          "correlationId"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "eventType",
+            "transactionId",
+            "correlationId",
+            "disconnectOrderNumber",
+            "createdAt"
+          ],
+          "properties": {
+            "eventType": {
+              "type": "string",
+              "enum": [
+                "DISCONNECT_ORDER_CREATED"
+              ]
+            },
+            "transactionId": {
+              "type": "string"
+            },
+            "correlationId": {
+              "type": "string"
+            },
+            "disconnectOrderNumber": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "ACKNOWLEDGED",
+            "receivedAt": "string"
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 404,
+            "body": {
+              "status": "REJECTED",
+              "errorCode": "UNKNOWN_CORRELATION_ID",
+              "message": "Correlation ID not found in active disconnect workflow",
+              "receivedAt": "string"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API6",
+      "name": "SoftDisconnectEvent",
+      "method": "POST",
+      "path": "/events/disconnect-status",
+      "syncAsync": "ASYNC",
+      "slaSeconds": 30,
+      "purpose": "Async progress event #1",
+      "request": {
+        "requiredFields": [
+          "correlationId",
+          "eventType"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "correlationId",
+            "eventType"
+          ],
+          "properties": {
+            "correlationId": {
+              "type": "string"
+            },
+            "eventType": {
+              "type": "string",
+              "enum": [
+                "SOFT_DISCONNECT_DONE"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "RECEIVED",
+            "siteIds": [
+              "string"
+            ]
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 409,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "EVENT_SEQUENCE_INVALID"
+            }
+          },
+          {
+            "statusCode": 404,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "UNKNOWN_CORRELATION_ID"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API7",
+      "name": "RippedOffWiresEvent",
+      "method": "POST",
+      "path": "/events/disconnect-status",
+      "syncAsync": "ASYNC",
+      "slaSeconds": 30,
+      "purpose": "Async progress event #2",
+      "request": {
+        "requiredFields": [
+          "correlationId",
+          "eventType"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "correlationId",
+            "eventType"
+          ],
+          "properties": {
+            "correlationId": {
+              "type": "string"
+            },
+            "eventType": {
+              "type": "string",
+              "enum": [
+                "RIPPED_OFF_WIRES"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "RECEIVED",
+            "siteIds": [
+              "string"
+            ]
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 409,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "EVENT_SEQUENCE_INVALID"
+            }
+          },
+          {
+            "statusCode": 404,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "UNKNOWN_CORRELATION_ID"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiId": "API8",
+      "name": "HardDisconnectEvent",
+      "method": "POST",
+      "path": "/events/disconnect-status",
+      "syncAsync": "ASYNC",
+      "slaSeconds": 30,
+      "purpose": "Async progress event #3 final",
+      "request": {
+        "requiredFields": [
+          "correlationId",
+          "eventType"
+        ],
+        "schema": {
+          "type": "object",
+          "required": [
+            "correlationId",
+            "eventType"
+          ],
+          "properties": {
+            "correlationId": {
+              "type": "string"
+            },
+            "eventType": {
+              "type": "string",
+              "enum": [
+                "HARD_DISCONNECT_DONE"
+              ]
+            }
+          }
+        }
+      },
+      "responses": {
+        "success": {
+          "statusCode": 200,
+          "body": {
+            "status": "RECEIVED",
+            "siteIds": [
+              "string"
+            ]
+          }
+        },
+        "failures": [
+          {
+            "statusCode": 409,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "EVENT_SEQUENCE_INVALID"
+            }
+          },
+          {
+            "statusCode": 409,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "HARD_DISCONNECT_EVENT_MISSING"
+            }
+          },
+          {
+            "statusCode": 404,
+            "body": {
+              "status": "FAILED",
+              "errorCode": "UNKNOWN_CORRELATION_ID"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "sharedEntities": {
+    "site": {
+      "type": "object",
+      "required": [
+        "siteId"
+      ],
+      "properties": {
+        "siteId": {
+          "type": "string"
+        }
+      }
+    },
+    "correlationWorkflow": {
+      "ordering": [
+        "DISCONNECT_ORDER_CREATED",
+        "SOFT_DISCONNECT_DONE",
+        "RIPPED_OFF_WIRES",
+        "HARD_DISCONNECT_DONE"
+      ],
+      "validationRules": [
+        "correlationId must be traceable across all sync and async steps",
+        "duplicate callbacks/events must be idempotent or safely rejected",
+        "events must be processed in order",
+        "final hard disconnect completion event is mandatory"
+      ]
+    }
+  },
+  "documentedFailureSamples": [
+    {
+      "artifact": "api1_address_validation_response_failure_mismatch.json",
+      "apiId": "API1",
+      "errorCode": "ADDR_MISMATCH"
+    },
+    {
+      "artifact": "api2_inventory_validation_response_failure_not_found.json",
+      "apiId": "API2",
+      "errorCode": "INVENTORY_ASSET_NOT_FOUND"
+    },
+    {
+      "artifact": "api3_pending_bills_response_failure_dues.json",
+      "apiId": "API3",
+      "errorCode": "PENDING_BILLS_FOUND"
+    },
+    {
+      "artifact": "api4_disconnect_submit_response_failure_duplicate.json",
+      "apiId": "API4",
+      "errorCode": "DUPLICATE_DISCONNECT_REQUEST"
+    },
+    {
+      "artifact": "api4_disconnect_submit_response_failure_rejected.json",
+      "apiId": "API4",
+      "errorCode": "PRECHECK_FAILED"
+    },
+    {
+      "artifact": "api5_disconnect_order_callback_response_failure_invalid_correlation.json",
+      "apiId": "API5",
+      "errorCode": "UNKNOWN_CORRELATION_ID"
+    },
+    {
+      "artifact": "async_event_out_of_order.json",
+      "apiId": "API6/API7/API8",
+      "errorCode": "EVENT_SEQUENCE_INVALID"
+    },
+    {
+      "artifact": "async_event_missing_final.json",
+      "apiId": "API8",
+      "errorCode": "HARD_DISCONNECT_EVENT_MISSING"
+    }
+  ]
+}

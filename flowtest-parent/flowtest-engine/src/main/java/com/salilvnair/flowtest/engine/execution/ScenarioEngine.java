@@ -17,8 +17,11 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -153,6 +156,14 @@ public class ScenarioEngine {
     }
 
     private WireMockServer activeWireMock;
+    private volatile Map<String, Object> lastWireMockSnapshot = Map.of(
+            "enabled", false,
+            "message", "WireMock has not been initialized yet"
+    );
+
+    public Map<String, Object> getLastWireMockSnapshot() {
+        return lastWireMockSnapshot;
+    }
 
     private WireMockRunMetadata bootstrapWireMockIfPossible(TestScenario scenario) {
         List<ScenarioStep> apiSteps = scenario.getSteps() == null
@@ -167,12 +178,18 @@ public class ScenarioEngine {
                 .toList();
 
         if (apiSteps.isEmpty() && scenarioMocks.isEmpty()) {
+            this.lastWireMockSnapshot = Map.of(
+                    "enabled", false,
+                    "scenarioId", scenario.getScenarioId() == null ? "" : scenario.getScenarioId(),
+                    "message", "No API steps or top-level mocks found"
+            );
             return WireMockRunMetadata.builder().enabled(false).stubCount(0).build();
         }
 
         WireMockServer server = new WireMockServer(options().dynamicPort());
         server.start();
         int stubCount = 0;
+        List<Map<String, Object>> registeredMappings = new ArrayList<>();
 
         for (ScenarioStep step : apiSteps) {
             Map<String, Object> reqMap = step.getRequest();
@@ -196,6 +213,12 @@ public class ScenarioEngine {
                             .withHeader("Content-Type", "application/json")
                             .withBody(body)));
             stubCount++;
+            registeredMappings.add(Map.of(
+                    "method", method,
+                    "url", path,
+                    "status", status,
+                    "responseBody", mockResponse
+            ));
         }
 
         // Also support top-level DSL mocks: { request: { method, url }, response: { status, jsonBody/body, headers } }
@@ -246,6 +269,12 @@ public class ScenarioEngine {
                 server.stubFor(request(method, urlEqualTo(normalizedUrl)).willReturn(responseBuilder));
             }
             stubCount++;
+            registeredMappings.add(Map.of(
+                    "method", method,
+                    "url", normalizedUrl,
+                    "status", status,
+                    "responseBody", bodyValue == null ? Map.of() : bodyValue
+            ));
         }
 
         if (stubCount == 0) {
@@ -254,18 +283,120 @@ public class ScenarioEngine {
                     apiSteps.size(),
                     scenarioMocks.size());
             server.stop();
+            this.lastWireMockSnapshot = Map.of(
+                    "enabled", false,
+                    "scenarioId", scenario.getScenarioId() == null ? "" : scenario.getScenarioId(),
+                    "message", "WireMock started but no valid stubs could be registered"
+            );
             return WireMockRunMetadata.builder().enabled(false).stubCount(0).build();
         }
 
         this.activeWireMock = server;
+        String baseUrl = "http://localhost:" + server.port();
+        this.lastWireMockSnapshot = buildWireMockSnapshot(
+                scenario.getScenarioId(),
+                baseUrl,
+                registeredMappings
+        );
         log.info("flowtest-wiremock bootstrap=enabled scenarioId={} stubCount={} port={}",
                 scenario.getScenarioId(), stubCount, server.port());
         return WireMockRunMetadata.builder()
                 .enabled(true)
-                .baseUrl("http://localhost:" + server.port())
+                .baseUrl(baseUrl)
                 .port(server.port())
                 .stubCount(stubCount)
                 .build();
+    }
+
+    private Map<String, Object> buildWireMockSnapshot(
+            String scenarioId,
+            String baseUrl,
+            List<Map<String, Object>> mappings
+    ) {
+        List<Map<String, Object>> sorted = mappings.stream()
+                .sorted(Comparator.comparing(m -> String.valueOf(m.getOrDefault("url", "")) + "#" + String.valueOf(m.getOrDefault("method", ""))))
+                .toList();
+
+        Map<String, Object> openapi = buildOpenApiFromMappings(scenarioId, baseUrl, sorted);
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("enabled", true);
+        snapshot.put("scenarioId", scenarioId == null ? "" : scenarioId);
+        snapshot.put("baseUrl", baseUrl);
+        snapshot.put("adminMappingsUrl", baseUrl + "/__admin/mappings");
+        snapshot.put("generatedAt", Instant.now().toString());
+        snapshot.put("stubCount", sorted.size());
+        snapshot.put("mappings", sorted);
+        snapshot.put("openapi", openapi);
+        return snapshot;
+    }
+
+    private Map<String, Object> buildOpenApiFromMappings(
+            String scenarioId,
+            String baseUrl,
+            List<Map<String, Object>> mappings
+    ) {
+        Map<String, Object> paths = new LinkedHashMap<>();
+        int opIndex = 1;
+        for (Map<String, Object> mapping : mappings) {
+            String method = String.valueOf(mapping.getOrDefault("method", "GET")).toLowerCase();
+            String url = String.valueOf(mapping.getOrDefault("url", "/"));
+            String normalizedPath = normalizePath(url);
+            int status = parseStatus(mapping.get("status"));
+            Object responseBody = mapping.get("responseBody");
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> pathItem = (Map<String, Object>) paths.computeIfAbsent(normalizedPath, k -> new LinkedHashMap<>());
+            Map<String, Object> operation = new LinkedHashMap<>();
+            operation.put("operationId", "wiremockOp" + (opIndex++));
+            operation.put("summary", method.toUpperCase() + " " + normalizedPath);
+
+            Map<String, Object> responses = new LinkedHashMap<>();
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("description", "Mock response from WireMock stub");
+
+            Map<String, Object> media = new LinkedHashMap<>();
+            Map<String, Object> appJson = new LinkedHashMap<>();
+            Object example = maybeJson(responseBody);
+            appJson.put("example", example);
+            media.put("application/json", appJson);
+            response.put("content", media);
+            responses.put(String.valueOf(status), response);
+
+            operation.put("responses", responses);
+            pathItem.put(method, operation);
+        }
+
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("title", "FlowTest WireMock Runtime API");
+        info.put("version", "1.0.0");
+        info.put("description", "OpenAPI generated from active WireMock mappings for scenario " + (scenarioId == null ? "" : scenarioId));
+
+        Map<String, Object> server = new LinkedHashMap<>();
+        server.put("url", baseUrl);
+        server.put("description", "Active WireMock runtime");
+
+        Map<String, Object> openapi = new LinkedHashMap<>();
+        openapi.put("openapi", "3.0.3");
+        openapi.put("info", info);
+        openapi.put("servers", List.of(server));
+        openapi.put("paths", paths);
+        return openapi;
+    }
+
+    private Object maybeJson(Object value) {
+        if (value == null) return Map.of();
+        if (value instanceof String s) {
+            String t = s.trim();
+            if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+                try {
+                    return objectMapper.readValue(t, Object.class);
+                } catch (Exception ignored) {
+                    return s;
+                }
+            }
+            return s;
+        }
+        return value;
     }
 
     @SuppressWarnings("unchecked")

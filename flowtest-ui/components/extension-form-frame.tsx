@@ -112,6 +112,7 @@ window.acquireVsCodeApi = function(){
 </script>`;
 
     let html = template;
+    html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, "");
     if (html.includes("<head>")) {
       html = html.replace("<head>", `<head>${fallbackStyle}${apiShim}`);
     }
@@ -215,7 +216,7 @@ window.acquireVsCodeApi = function(){
       onLoad={applyThemeVars}
       title="FlowTest Form"
       style={{ border: "none", width: "100%", height: "100vh", display: "block" }}
-      sandbox="allow-same-origin allow-scripts allow-downloads"
+      sandbox="allow-same-origin allow-scripts allow-downloads allow-modals"
     />
   );
 }
