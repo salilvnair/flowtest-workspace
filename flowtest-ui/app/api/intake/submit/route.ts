@@ -178,7 +178,10 @@ export async function POST(req: NextRequest) {
     let wiremockOpenApiUrl: string | null = null;
     let wiremockAdminMappingsUrl: string | null = null;
     const preflightError = String(chain.parsed.preflightError ?? "").trim();
-    const canRunEngine = !!chain.parsed.scenarioJson && !preflightError && !!chain.parsed.mockCoverageOk;
+    const scenarioList = Array.isArray(chain.parsed.scenariosJson) && chain.parsed.scenariosJson.length > 0
+      ? chain.parsed.scenariosJson
+      : (chain.parsed.scenarioJson ? [chain.parsed.scenarioJson] : []);
+    const canRunEngine = scenarioList.length > 0 && !preflightError && !!chain.parsed.mockCoverageOk;
 
     if (!canRunEngine) {
       engine = {
@@ -193,30 +196,51 @@ export async function POST(req: NextRequest) {
         skipped: true,
         error: "Allure skipped because engine run was not started"
       };
-    } else if (chain.parsed.scenarioJson) {
+    } else if (scenarioList.length > 0) {
       const preClean = await resetAllureArtifactsBeforeRun();
-      const upstream = await fetch(`${ENGINE_BASE_URL}/api/scenarios/run-temporal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scenario: chain.parsed.scenarioJson })
-      });
-      const body = await upstream.text();
-      let workflowId = "";
-      let runId = "";
-      try {
-        const parsed = JSON.parse(body);
-        workflowId = String(parsed?.workflowId ?? "");
-        runId = String(parsed?.runId ?? "");
-      } catch {
-        // ignore
+      const engineRuns: Array<any> = [];
+      let meta: ReturnType<typeof extractAllureMetaFromEngineBody> = {};
+      for (let idx = 0; idx < scenarioList.length; idx++) {
+        const scenarioItem = scenarioList[idx];
+        const scenarioId = String((scenarioItem as any)?.scenarioId || `scenario-${idx + 1}`);
+        const upstream = await fetch(`${ENGINE_BASE_URL}/api/scenarios/run-temporal`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenario: scenarioItem })
+        });
+        const body = await upstream.text();
+        let workflowId = "";
+        let runId = "";
+        try {
+          const parsed = JSON.parse(body);
+          workflowId = String(parsed?.workflowId ?? "");
+          runId = String(parsed?.runId ?? "");
+        } catch {
+          // ignore
+        }
+        meta = extractAllureMetaFromEngineBody(body);
+        engineRuns.push({
+          ok: upstream.ok,
+          status: upstream.status,
+          body,
+          workflowId: workflowId || undefined,
+          runId: runId || undefined,
+          scenarioId
+        });
       }
-      const meta = extractAllureMetaFromEngineBody(body);
+      const passedRuns = engineRuns.filter((r) => !!r.ok).length;
+      const failedRuns = engineRuns.length - passedRuns;
+      const lastRun = engineRuns[engineRuns.length - 1] || {};
       engine = {
-        ok: upstream.ok,
-        status: upstream.status,
-        body,
-        workflowId: workflowId || undefined,
-        runId: runId || undefined
+        ok: failedRuns === 0,
+        status: failedRuns === 0 ? 200 : 207,
+        runs: engineRuns,
+        body: String(lastRun?.body || ""),
+        workflowId: lastRun?.workflowId,
+        runId: lastRun?.runId,
+        passedRuns,
+        failedRuns,
+        totalRuns: engineRuns.length
       };
       if (meta.generateCommand && meta.resultsPath && meta.reportDir) {
         try {

@@ -286,13 +286,16 @@ export async function POST(req: Request) {
           let wiremockOpenApiUrl: string | null = null;
           let wiremockAdminMappingsUrl: string | null = null;
           const preflightError = String(chain.parsed.preflightError ?? "").trim();
-          const canRunEngine = !!chain.parsed.scenarioJson && !preflightError && !!chain.parsed.mockCoverageOk;
+          const scenarioList = Array.isArray(chain.parsed.scenariosJson) && chain.parsed.scenariosJson.length > 0
+            ? chain.parsed.scenariosJson
+            : (chain.parsed.scenarioJson ? [chain.parsed.scenarioJson] : []);
+          const canRunEngine = scenarioList.length > 0 && !preflightError && !!chain.parsed.mockCoverageOk;
 
           sendEvent({
             stage: "Scenario DSL",
             status: chain.parsed.scenarioJson ? "success" : "error",
             title: chain.parsed.scenarioJson ? "Json Parse Ok" : "Json Parse Failed",
-            meta: { scenario_json_ok: !!chain.parsed.scenarioJson, preflight_error: preflightError || "-", attached_mocks: Number(chain.parsed.attachedMockCount ?? 0) }
+            meta: { scenario_json_ok: !!chain.parsed.scenarioJson, scenario_count: scenarioList.length, preflight_error: preflightError || "-", attached_mocks: Number(chain.parsed.attachedMockCount ?? 0) }
           });
           sendEvent({
             stage: "Scenario DSL",
@@ -302,7 +305,17 @@ export async function POST(req: Request) {
           });
           sendSummary("Running", "Running Engine...");
           sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Running FlowTest engine validation...", meta: { next_stage: "Engine Run" } });
-          sendEvent({ stage: "Engine Run", status: "running", title: "Started", meta: { engine_url: `${ENGINE_BASE_URL}/api/scenarios/run-temporal`, method: "POST", can_run_engine: canRunEngine } });
+          sendEvent({
+            stage: "Engine Run",
+            status: "running",
+            title: "Started",
+            meta: {
+              engine_url: `${ENGINE_BASE_URL}/api/scenarios/run-temporal`,
+              method: "POST",
+              can_run_engine: canRunEngine,
+              scenario_count: scenarioList.length
+            }
+          });
 
           if (!canRunEngine) {
             engine = { ok: false, skipped: true, reason: preflightError || "Scenario preflight failed before engine run", status: 0, body: "" };
@@ -310,46 +323,91 @@ export async function POST(req: Request) {
             sendEvent({ stage: "Engine Run", status: "error", title: "Preflight Failed", detail: engine.reason });
           } else {
             const preClean = await resetAllureArtifactsBeforeRun();
-            const upstream = await fetch(`${ENGINE_BASE_URL}/api/scenarios/run-temporal`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ scenario: chain.parsed.scenarioJson })
-            });
-            const body = await upstream.text();
-            let workflowId = "";
-            let runId = "";
-            try {
-              const parsed = JSON.parse(body);
-              workflowId = String(parsed?.workflowId ?? "");
-              runId = String(parsed?.runId ?? "");
-            } catch {}
-            const meta = extractAllureMetaFromEngineBody(body);
-            engine = { ok: upstream.ok, status: upstream.status, body, workflowId: workflowId || undefined, runId: runId || undefined };
-
-            if (workflowId) {
-              const temporalLink = `${temporalBase}/${workflowId}${runId ? `/${runId}` : ""}`;
-              send({ type: "temporal", payload: { temporalLink } });
+            const engineRuns: Array<any> = [];
+            let meta: ReturnType<typeof extractAllureMetaFromEngineBody> = {};
+            for (let idx = 0; idx < scenarioList.length; idx++) {
+              const scenarioItem = scenarioList[idx];
+              const scenarioId = String((scenarioItem as any)?.scenarioId || `scenario-${idx + 1}`);
               sendEvent({
                 stage: "Engine Run",
                 status: "running",
-                title: "Temporal Workflow Started",
-                detail: temporalLink,
-                meta: { temporal_link: temporalLink, workflow_id: workflowId, run_id: runId || "-" }
+                title: "Scenario Dispatch",
+                detail: `${idx + 1}/${scenarioList.length} ${scenarioId}`,
+                meta: { scenario_index: idx + 1, scenario_total: scenarioList.length, scenario_id: scenarioId }
+              });
+              const upstream = await fetch(`${ENGINE_BASE_URL}/api/scenarios/run-temporal`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ scenario: scenarioItem })
+              });
+              const body = await upstream.text();
+              let workflowId = "";
+              let runId = "";
+              try {
+                const parsed = JSON.parse(body);
+                workflowId = String(parsed?.workflowId ?? "");
+                runId = String(parsed?.runId ?? "");
+              } catch {}
+              meta = extractAllureMetaFromEngineBody(body);
+              const runOk = upstream.ok;
+              engineRuns.push({
+                ok: runOk,
+                status: upstream.status,
+                body,
+                workflowId: workflowId || undefined,
+                runId: runId || undefined,
+                scenarioId
+              });
+
+              if (workflowId) {
+                const temporalLink = `${temporalBase}/${workflowId}${runId ? `/${runId}` : ""}`;
+                send({ type: "temporal", payload: { temporalLink } });
+                sendEvent({
+                  stage: "Engine Run",
+                  status: runOk ? "running" : "error",
+                  title: "Temporal Workflow Started",
+                  detail: temporalLink,
+                  meta: {
+                    temporal_link: temporalLink,
+                    workflow_id: workflowId,
+                    run_id: runId || "-",
+                    scenario_id: scenarioId,
+                    scenario_index: idx + 1,
+                    scenario_total: scenarioList.length
+                  }
+                });
+              }
+
+              sendEvent({
+                stage: "Engine Run",
+                status: runOk ? "running" : "error",
+                title: "Response Received",
+                detail: `http_status=${upstream.status}`,
+                meta: {
+                  http_status: upstream.status,
+                  workflow_id: workflowId || "-",
+                  run_id: runId || "-",
+                  response_chars: body.length,
+                  scenario_id: scenarioId,
+                  scenario_index: idx + 1,
+                  scenario_total: scenarioList.length
+                }
               });
             }
-
-            sendEvent({
-              stage: "Engine Run",
-              status: upstream.ok ? "running" : "error",
-              title: "Response Received",
-              detail: `http_status=${upstream.status}`,
-              meta: {
-                http_status: upstream.status,
-                workflow_id: workflowId || "-",
-                run_id: runId || "-",
-                response_chars: body.length
-              }
-            });
+            const passedRuns = engineRuns.filter((r) => !!r.ok).length;
+            const failedRuns = engineRuns.length - passedRuns;
+            const lastRun = engineRuns[engineRuns.length - 1] || {};
+            engine = {
+              ok: failedRuns === 0,
+              status: failedRuns === 0 ? 200 : 207,
+              runs: engineRuns,
+              body: String(lastRun?.body || ""),
+              workflowId: lastRun?.workflowId,
+              runId: lastRun?.runId,
+              passedRuns,
+              failedRuns,
+              totalRuns: engineRuns.length
+            };
 
             if (meta.generateCommand && meta.resultsPath && meta.reportDir) {
               sendSummary("Running", "Generating Allure Report...");
@@ -475,7 +533,14 @@ export async function POST(req: Request) {
           });
 
           const finalOk = !preflightError && !!engine?.ok && !engine?.skipped;
-          sendSummary(finalOk ? "Completed" : "Failed", finalOk ? "Engine scenarios: 1/1 passed" : (preflightError || "Engine scenarios failed"));
+          const totalRuns = Number(engine?.totalRuns ?? 0);
+          const passedRuns = Number(engine?.passedRuns ?? 0);
+          sendSummary(
+            finalOk ? "Completed" : "Failed",
+            finalOk
+              ? `Engine scenarios: ${passedRuns}/${totalRuns || 1} passed`
+              : (preflightError || `Engine scenarios: ${passedRuns}/${totalRuns || 1} passed`)
+          );
           sendEvent({
             stage: "RUN",
             status: finalOk ? "success" : "error",
@@ -484,6 +549,9 @@ export async function POST(req: Request) {
               run_name: runName,
               orchestration_id: orchestrationId,
               engine_ok: finalOk,
+              scenario_total: Number(engine?.totalRuns ?? scenarioList.length),
+              scenario_passed: Number(engine?.passedRuns ?? 0),
+              scenario_failed: Number(engine?.failedRuns ?? 0),
               preflight_error: preflightError || "-",
               wiremock_base_url: String(chain.parsed.wiremockBaseUrl || "-")
             }

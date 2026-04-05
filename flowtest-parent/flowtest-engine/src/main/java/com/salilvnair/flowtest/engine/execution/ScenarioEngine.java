@@ -9,6 +9,7 @@ import com.salilvnair.flowtest.engine.events.ExecutionEventPublisher;
 import com.salilvnair.flowtest.engine.events.ExecutionEventType;
 import com.salilvnair.flowtest.engine.step.StepDispatcher;
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.client.MappingBuilder;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,11 @@ import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalToJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.matching;
+import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.request;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
@@ -265,15 +271,22 @@ public class ScenarioEngine {
                 }
             }
 
+            MappingBuilder mappingBuilder;
             if (reqMap.get("urlPathPattern") != null) {
-                server.stubFor(request(method, urlPathMatching(normalizedUrl)).willReturn(responseBuilder));
+                mappingBuilder = request(method, urlPathMatching(normalizedUrl));
             } else if (reqMap.get("urlPattern") != null) {
-                server.stubFor(request(method, urlMatching(normalizedUrl)).willReturn(responseBuilder));
+                mappingBuilder = request(method, urlMatching(normalizedUrl));
             } else if (reqMap.get("urlPath") != null) {
-                server.stubFor(request(method, urlPathEqualTo(normalizedUrl)).willReturn(responseBuilder));
+                mappingBuilder = request(method, urlPathEqualTo(normalizedUrl));
             } else {
-                server.stubFor(request(method, urlEqualTo(normalizedUrl)).willReturn(responseBuilder));
+                mappingBuilder = request(method, urlEqualTo(normalizedUrl));
             }
+            mappingBuilder = applyRequestMatchers(mappingBuilder, reqMap);
+            Integer priority = parsePriority(firstNonNull(mock.get("priority"), reqMap.get("priority")));
+            if (priority != null) {
+                mappingBuilder = mappingBuilder.atPriority(priority);
+            }
+            server.stubFor(mappingBuilder.willReturn(responseBuilder));
             stubCount++;
             registeredMappings.add(Map.of(
                     "method", method,
@@ -641,6 +654,76 @@ public class ScenarioEngine {
         return Map.of();
     }
 
+    private MappingBuilder applyRequestMatchers(MappingBuilder builder, Map<String, Object> reqMap) {
+        if (builder == null || reqMap == null || reqMap.isEmpty()) {
+            return builder;
+        }
+
+        Map<String, Object> headers = asMap(reqMap.get("headers"));
+        if (headers != null && !headers.isEmpty()) {
+            for (Map.Entry<String, Object> entry : headers.entrySet()) {
+                if (entry.getKey() == null || entry.getValue() == null) continue;
+                String headerName = String.valueOf(entry.getKey());
+                Object raw = entry.getValue();
+                Map<String, Object> patternMap = asMap(raw);
+                if (patternMap != null && !patternMap.isEmpty()) {
+                    if (patternMap.get("equalTo") != null) {
+                        builder = builder.withHeader(headerName, equalTo(String.valueOf(patternMap.get("equalTo"))));
+                    } else if (patternMap.get("contains") != null) {
+                        builder = builder.withHeader(headerName, containing(String.valueOf(patternMap.get("contains"))));
+                    } else if (patternMap.get("matches") != null) {
+                        builder = builder.withHeader(headerName, matching(String.valueOf(patternMap.get("matches"))));
+                    } else {
+                        builder = builder.withHeader(headerName, equalTo(String.valueOf(raw)));
+                    }
+                } else {
+                    builder = builder.withHeader(headerName, equalTo(String.valueOf(raw)));
+                }
+            }
+        }
+
+        Object bodyPatternsRaw = reqMap.get("bodyPatterns");
+        if (bodyPatternsRaw instanceof List<?> patterns) {
+            for (Object patternObj : patterns) {
+                Map<String, Object> pattern = asMap(patternObj);
+                if (pattern == null || pattern.isEmpty()) continue;
+
+                Object matchesJsonPathExpr = pattern.get("matchesJsonPath");
+                if (matchesJsonPathExpr != null) {
+                    String expr = String.valueOf(matchesJsonPathExpr).trim();
+                    if (!expr.isBlank()) {
+                        if (pattern.get("equalTo") != null) {
+                            builder = builder.withRequestBody(matchingJsonPath(expr, equalTo(String.valueOf(pattern.get("equalTo")))));
+                        } else {
+                            builder = builder.withRequestBody(matchingJsonPath(expr));
+                        }
+                    }
+                    continue;
+                }
+
+                Object equalToJsonRaw = pattern.get("equalToJson");
+                if (equalToJsonRaw != null) {
+                    String json = equalToJsonRaw instanceof String s ? s : toJsonString(equalToJsonRaw);
+                    builder = builder.withRequestBody(equalToJson(json, true, true));
+                    continue;
+                }
+
+                if (pattern.get("equalTo") != null) {
+                    builder = builder.withRequestBody(equalTo(String.valueOf(pattern.get("equalTo"))));
+                    continue;
+                }
+                if (pattern.get("contains") != null) {
+                    builder = builder.withRequestBody(containing(String.valueOf(pattern.get("contains"))));
+                    continue;
+                }
+                if (pattern.get("matches") != null) {
+                    builder = builder.withRequestBody(matching(String.valueOf(pattern.get("matches"))));
+                }
+            }
+        }
+        return builder;
+    }
+
     private String normalizePath(String rawUrl) {
         if (rawUrl == null || rawUrl.isBlank()) {
             return "/";
@@ -748,6 +831,16 @@ public class ScenarioEngine {
             return Integer.parseInt(String.valueOf(value));
         } catch (Exception ignored) {
             return 200;
+        }
+    }
+
+    private Integer parsePriority(Object value) {
+        if (value == null) return null;
+        try {
+            int n = Integer.parseInt(String.valueOf(value));
+            return n > 0 ? n : null;
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

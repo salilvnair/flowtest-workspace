@@ -33,6 +33,7 @@ export type IntakeChainResult = {
   };
   parsed: {
     scenarioJson: Record<string, unknown> | null;
+    scenariosJson?: Array<Record<string, unknown>>;
     wiremockMockCount: number;
     attachedMockCount?: number;
     mockCoverageOk?: boolean;
@@ -252,6 +253,25 @@ function extractJsonValue(text: string): unknown {
   }
 }
 
+function normalizeScenarioSuite(value: unknown): Array<Record<string, unknown>> {
+  const asObject = (v: unknown): Record<string, unknown> | null =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+  const rootObj = asObject(value);
+  if (!rootObj) return [];
+
+  if (Array.isArray((rootObj as any).scenarios)) {
+    const out: Array<Record<string, unknown>> = [];
+    for (const raw of (rootObj as any).scenarios as Array<unknown>) {
+      const obj = asObject(raw);
+      if (obj) out.push(obj);
+    }
+    return out;
+  }
+
+  return [rootObj];
+}
+
 function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> {
   const asObject = (v: unknown): Record<string, unknown> | null =>
     v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -271,7 +291,12 @@ function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> 
       ""
     ).trim();
     if (!method || !url) return null;
-    return { request, response };
+    const normalized: Record<string, unknown> = { request, response };
+    if ((obj as any).priority !== undefined) normalized.priority = (obj as any).priority;
+    if ((obj as any).id !== undefined) normalized.id = (obj as any).id;
+    if ((obj as any).name !== undefined) normalized.name = (obj as any).name;
+    if ((obj as any).scenarioName !== undefined) normalized.scenarioName = (obj as any).scenarioName;
+    return normalized;
   };
 
   const out: Array<Record<string, unknown>> = [];
@@ -449,7 +474,47 @@ export async function runIntakePromptChain(
     ]
   });
 
-  const wiremockPrompt = `Generate WireMock mappings using this API understanding:\n\n${apiSpec.responseText}${addon}`;
+  const wiremockPrompt =
+    [
+      "Generate production-grade WireMock mappings from this API spec.",
+      "",
+      "STRICT OUTPUT (JSON only, no markdown):",
+      "{",
+      '  "mappings": [',
+      "    {",
+      '      "id": "string",',
+      '      "name": "string",',
+      '      "priority": 10,',
+      '      "request": {',
+      '        "method": "POST",',
+      '        "urlPath": "/example/path",',
+      '        "headers": { "Content-Type": { "equalTo": "application/json" } },',
+      '        "bodyPatterns": [',
+      '          { "matchesJsonPath": "$.field" },',
+      '          { "matchesJsonPath": "$.type", "equalTo": "SUCCESS_OR_FAILURE_DISCRIMINATOR" }',
+      "        ]",
+      "      },",
+      '      "response": {',
+      '        "status": 200,',
+      '        "headers": { "Content-Type": "application/json" },',
+      '        "jsonBody": {}',
+      "      }",
+      "    }",
+      "  ]",
+      "}",
+      "",
+      "MANDATORY RULES:",
+      "1) For EVERY API, generate at least one success mapping and one failure mapping.",
+      "2) Failure mappings MUST include realistic 4xx/5xx status and error payload from docs.",
+      "3) Use strong request discriminators via bodyPatterns/headers so success and failure are both testable.",
+      "4) Set explicit priority: specific failure stubs should have higher precedence (lower number) than generic success stubs.",
+      "5) Do not create duplicate ambiguous mappings with same matcher set.",
+      "6) Keep URL/method exactly aligned with API spec.",
+      "7) Return only JSON, no explanation.",
+      "",
+      "API SPEC INPUT:",
+      apiSpec.responseText + addon
+    ].join("\n");
   const wiremockStartedAt = new Date().toISOString();
   await onProgress?.({
     stage: "WireMock",
@@ -485,11 +550,14 @@ export async function runIntakePromptChain(
   const strictSchemaHint = [
     "REQUIRED OUTPUT RULES:",
     "1) Return ONLY one JSON object (no markdown).",
-    "2) Top-level keys MUST be: dslVersion, scenarioId, name, steps.",
-    "3) steps MUST be an array of objects with: id, type, request.",
-    "4) type MUST be one of: api-call, api-assert, log, set-context, sleep.",
-    "5) For api-call/api-assert each step request MUST include method and url.",
-    "6) Do not return 'flowName' or 'scenarios[]' wrapper."
+    "2) Top-level keys MUST be: dslVersion, flowName, scenarios.",
+    "3) scenarios MUST be an array with 5 to 6 scenario objects.",
+    "4) Each scenario MUST include: scenarioId, name, tags, steps.",
+    "5) steps MUST be an array of objects with: id, type, request.",
+    "6) type MUST be one of: api-call, api-assert, log, set-context, sleep.",
+    "7) For api-call/api-assert each step request MUST include method and url.",
+    "8) Scenario set MUST include: 1 happy path + multiple negative/edge paths based on failure docs.",
+    "9) Keep request/response expectations deterministic and testable."
   ].join("\n");
   const scenarioPrompt =
     "Generate FlowTest DSL scenario JSON using the below artifacts.\n\n" +
@@ -531,20 +599,17 @@ export async function runIntakePromptChain(
     ]
   });
 
-  const scenarioJson = extractJsonObject(scenario.responseText);
+  const scenarioValue = extractJsonValue(scenario.responseText);
+  const scenariosJson = normalizeScenarioSuite(scenarioValue);
+  const scenarioJson = scenariosJson.length > 0 ? scenariosJson[0] : null;
   const wiremockJson = extractJsonValue(wiremock.responseText);
   const normalizedMocks = normalizeWiremockMocks(wiremockJson);
-  const happyPathHint =
-    /happy/i.test(String(intake.runName || "")) ||
-    /happy/i.test(String(intake.additionalInfo || "")) ||
-    /happy/i.test(String((scenarioJson as any)?.scenarioId || "")) ||
-    /happy/i.test(String((scenarioJson as any)?.name || ""));
-  const effectiveMocks = happyPathHint ? preferSuccessMappings(normalizedMocks) : normalizedMocks;
+  const effectiveMocks = normalizedMocks;
   let attachedMockCount = 0;
   let mockCoverageOk = false;
   let preflightError: string | null = null;
 
-  if (!scenarioJson) {
+  if (!scenarioJson || scenariosJson.length === 0) {
     preflightError = "Scenario output was not valid JSON";
     await onProgress?.({
       stage: "Scenario DSL",
@@ -553,9 +618,17 @@ export async function runIntakePromptChain(
       detail: preflightError
     });
   } else {
-    attachedMockCount = attachInferredMocksToScenario(scenarioJson, effectiveMocks);
-    const coverage = countScenarioMockCoverage(scenarioJson);
-    mockCoverageOk = coverage.mocks > 0 || coverage.inline > 0;
+    let attachedTotal = 0;
+    let coverageMocks = 0;
+    let coverageInline = 0;
+    for (const sc of scenariosJson) {
+      attachedTotal += attachInferredMocksToScenario(sc, effectiveMocks);
+      const coverage = countScenarioMockCoverage(sc);
+      coverageMocks += coverage.mocks;
+      coverageInline += coverage.inline;
+    }
+    attachedMockCount = attachedTotal;
+    mockCoverageOk = coverageMocks > 0 || coverageInline > 0;
     if (!mockCoverageOk) {
       preflightError = "No mocks were extracted/attached. Engine run skipped to avoid live API 404.";
       await onProgress?.({
@@ -565,7 +638,7 @@ export async function runIntakePromptChain(
         detail: preflightError,
         meta: {
           wiremock_mocks: effectiveMocks.length,
-          attached_mocks: attachedMockCount,
+          attached_mocks: attachedTotal,
           coverage_ok: false,
           preflight_error: preflightError
         }
@@ -578,7 +651,7 @@ export async function runIntakePromptChain(
         detail: `wiremock_mocks=${effectiveMocks.length} | attached_mocks=${attachedMockCount} | coverage_ok=true`,
         meta: {
           wiremock_mocks: effectiveMocks.length,
-          attached_mocks: attachedMockCount,
+          attached_mocks: attachedTotal,
           coverage_ok: true
         }
       });
@@ -603,6 +676,7 @@ export async function runIntakePromptChain(
     },
     parsed: {
       scenarioJson,
+      scenariosJson,
       wiremockMockCount: effectiveMocks.length,
       attachedMockCount,
       mockCoverageOk,
