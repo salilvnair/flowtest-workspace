@@ -25,6 +25,12 @@ function mmss(totalSeconds: number): string {
   return `${mm}:${ss}`;
 }
 
+function durationMsToMmss(durationMs: unknown): string {
+  const n = Number(durationMs);
+  if (!Number.isFinite(n) || n <= 0) return "00:00";
+  return mmss(Math.max(1, Math.ceil(n / 1000)));
+}
+
 export function FlowtestDashboard() {
   const searchParams = useSearchParams();
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -373,7 +379,7 @@ window.acquireVsCodeApi = function(){
       successCount,
       failureCount,
       intakeMode: mode,
-      allowFake: true
+      allowFake: false
     });
     postToWebview("summary", { status: "Running", detail: "Starting live intake orchestration..." });
     postToWebview("event", {
@@ -482,7 +488,7 @@ window.acquireVsCodeApi = function(){
       successCount,
       failureCount,
       intakeMode: mode,
-      allowFake: true
+      allowFake: false
     });
     postToWebview("summary", { status: "Running", detail: "Executing FlowTest chain..." });
 
@@ -543,6 +549,7 @@ window.acquireVsCodeApi = function(){
           called_at: api.calledAt,
           completed_at: api.completedAt,
           duration_ms: api.durationMs,
+          duration: durationMsToMmss(api.durationMs),
           response_chars: apiOutput.length,
           error: false
         },
@@ -580,6 +587,7 @@ window.acquireVsCodeApi = function(){
           called_at: wire.calledAt,
           completed_at: wire.completedAt,
           duration_ms: wire.durationMs,
+          duration: durationMsToMmss(wire.durationMs),
           response_chars: wireOutput.length,
           error: false
         },
@@ -617,6 +625,7 @@ window.acquireVsCodeApi = function(){
           called_at: scenario.calledAt,
           completed_at: scenario.completedAt,
           duration_ms: scenario.durationMs,
+          duration: durationMsToMmss(scenario.durationMs),
           response_chars: scOutput.length,
           error: false
         },
@@ -959,7 +968,7 @@ window.acquireVsCodeApi = function(){
               successCount,
               failureCount,
               intakeMode: mode,
-              allowFake: true
+              allowFake: false
             });
             postToWebview("event", { time: hhmmss(new Date()), stage: "RUN", status: "error", title: "Failed", detail: err });
             postToWebview("summary", { status: "Failed", detail: err });
@@ -987,7 +996,7 @@ window.acquireVsCodeApi = function(){
             successCount,
             failureCount,
             intakeMode: mode,
-            allowFake: true
+            allowFake: false
           });
           postToWebview("summary", { status: "Running", detail: "Waiting for intake payload from Start form..." });
           pushEvent({ stage: "RUN", status: "running", title: "Started" }, 60);

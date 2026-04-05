@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { GlobalSideNav } from "@/components/global-side-nav";
 
 export const metadata: Metadata = {
   title: "FlowTest UI",
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <div className="ftAppShell">{children}</div>
+        <GlobalSideNav />
+      </body>
     </html>
   );
 }

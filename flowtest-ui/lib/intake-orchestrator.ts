@@ -366,13 +366,22 @@ export async function runIntakePromptChain(
 ): Promise<IntakeChainResult> {
   const docsText = buildDocsText(intake);
   const addon = additionalInfoAddon(intake);
+  const provider = getProvider();
+  const model = getModel(provider);
 
   const apiSpecPrompt = `Generate normalized API spec from these docs.\n\n${docsText}${addon}`;
+  const apiSpecStartedAt = new Date().toISOString();
   await onProgress?.({
     stage: "API Spec",
     status: "running",
     title: "Ai Request Dispatched",
-    detail: "task=GENERATE_API_SPEC"
+    detail: "task=GENERATE_API_SPEC",
+    meta: {
+      task: "GENERATE_API_SPEC",
+      provider,
+      model,
+      called_at: apiSpecStartedAt
+    }
   });
   const apiSpec = await executeAiTaskDetailed("GENERATE_API_SPEC", apiSpecPrompt);
   await onProgress?.({
@@ -394,11 +403,18 @@ export async function runIntakePromptChain(
   });
 
   const wiremockPrompt = `Generate WireMock mappings using this API understanding:\n\n${apiSpec.responseText}${addon}`;
+  const wiremockStartedAt = new Date().toISOString();
   await onProgress?.({
     stage: "WireMock",
     status: "running",
     title: "Ai Request Dispatched",
-    detail: "task=GENERATE_MOCKS"
+    detail: "task=GENERATE_MOCKS",
+    meta: {
+      task: "GENERATE_MOCKS",
+      provider,
+      model,
+      called_at: wiremockStartedAt
+    }
   });
   const wiremock = await executeAiTaskDetailed("GENERATE_MOCKS", wiremockPrompt);
   await onProgress?.({
@@ -441,7 +457,13 @@ export async function runIntakePromptChain(
     stage: "Scenario DSL",
     status: "running",
     title: "Ai Request Dispatched",
-    detail: "task=GENERATE_SCENARIO"
+    detail: "task=GENERATE_SCENARIO",
+    meta: {
+      task: "GENERATE_SCENARIO",
+      provider,
+      model,
+      called_at: new Date().toISOString()
+    }
   });
   const scenario = await executeAiTaskDetailed("GENERATE_SCENARIO", scenarioPrompt);
   await onProgress?.({
@@ -493,14 +515,25 @@ export async function runIntakePromptChain(
         stage: "WireMock",
         status: "warn",
         title: "Mocks Parse Empty",
-        detail: preflightError
+        detail: preflightError,
+        meta: {
+          wiremock_mocks: effectiveMocks.length,
+          attached_mocks: attachedMockCount,
+          coverage_ok: false,
+          preflight_error: preflightError
+        }
       });
     } else {
       await onProgress?.({
         stage: "WireMock",
         status: "success",
         title: "Coverage Check",
-        detail: `wiremock_mocks=${effectiveMocks.length} | attached_mocks=${attachedMockCount} | coverage_ok=true`
+        detail: `wiremock_mocks=${effectiveMocks.length} | attached_mocks=${attachedMockCount} | coverage_ok=true`,
+        meta: {
+          wiremock_mocks: effectiveMocks.length,
+          attached_mocks: attachedMockCount,
+          coverage_ok: true
+        }
       });
     }
   }

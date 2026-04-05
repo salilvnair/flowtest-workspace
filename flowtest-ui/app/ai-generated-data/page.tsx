@@ -45,16 +45,34 @@ function CollapsibleCard({
   defaultOpen = false,
   children,
   extra,
-  copyText
+  copyText,
+  downloadFileName
 }: {
   title: string;
   defaultOpen?: boolean;
   children: React.ReactNode;
   extra?: React.ReactNode;
   copyText?: string;
+  downloadFileName?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+
+  const iconBtnStyle: React.CSSProperties = {
+    border: "1px solid color-mix(in srgb, var(--vscode-panel-border, #3a3f4b) 85%, transparent)",
+    borderRadius: 999,
+    width: 28,
+    height: 22,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#9fd1ff",
+    background: "transparent",
+    cursor: "pointer",
+    transition: "all 180ms ease"
+  };
+
   return (
     <section
       style={{
@@ -91,28 +109,61 @@ function CollapsibleCard({
         </span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
           {copyText ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                void navigator.clipboard.writeText(copyText);
-                setCopied(true);
-                window.setTimeout(() => setCopied(false), 900);
-              }}
-              style={{
-                border: "1px solid color-mix(in srgb, var(--vscode-panel-border, #3a3f4b) 85%, transparent)",
-                borderRadius: 999,
-                padding: "3px 8px",
-                fontSize: 10,
-                fontWeight: 800,
-                color: copied ? "#a9efb9" : "#9fd1ff",
-                background: copied ? "color-mix(in srgb, #89d185 16%, transparent)" : "transparent",
-                cursor: "pointer",
-                transition: "all 180ms ease"
-              }}
-              title="Copy"
-            >
-              {copied ? "Copied" : "Copy"}
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void navigator.clipboard.writeText(copyText);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 900);
+                }}
+                style={{
+                  ...iconBtnStyle,
+                  color: copied ? "#a9efb9" : "#9fd1ff",
+                  background: copied ? "color-mix(in srgb, #89d185 16%, transparent)" : "transparent"
+                }}
+                title="Copy"
+              >
+                {copied ? (
+                  <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, stroke: "currentColor", fill: "none", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", transform: "scale(1.02)", transition: "transform 180ms ease" }}>
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, stroke: "currentColor", fill: "none", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }}>
+                    <rect x="9" y="9" width="13" height="13" rx="2" />
+                    <path d="M5 15H4a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const name = (downloadFileName || title || "ai-data").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+                  const blob = new Blob([copyText], { type: "application/json;charset=utf-8" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${name}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  setDownloading(true);
+                  window.setTimeout(() => setDownloading(false), 520);
+                }}
+                style={{
+                  ...iconBtnStyle,
+                  color: downloading ? "#ffd27d" : "#9fd1ff",
+                  background: downloading ? "color-mix(in srgb, #ffd27d 14%, transparent)" : "transparent",
+                  transform: downloading ? "scale(0.96)" : "scale(1)"
+                }}
+                title="Download"
+              >
+                <svg viewBox="0 0 24 24" style={{ width: 14, height: 14, stroke: "currentColor", fill: "none", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }}>
+                  <path d="M12 3v12" />
+                  <path d="M7 10l5 5 5-5" />
+                  <path d="M5 21h14" />
+                </svg>
+              </button>
+            </>
           ) : null}
           {extra}
         </span>

@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -122,6 +123,7 @@ public class ScenarioEngine {
                             Instant.now(),
                             buildRunCompletedPayload(result, runStartedAt, Instant.now(), wireMockMeta)
                     ));
+                    enrichWireMockSnapshotWithRuntimeRequests(result);
                     return result;
                 }
 
@@ -146,6 +148,7 @@ public class ScenarioEngine {
                     Instant.now(),
                     buildRunCompletedPayload(result, runStartedAt, Instant.now(), wireMockMeta)
             ));
+            enrichWireMockSnapshotWithRuntimeRequests(result);
             return result;
         } finally {
             if (wireMockServer != null && wireMockServer.isRunning()) {
@@ -206,6 +209,7 @@ public class ScenarioEngine {
             String path = normalizePath(rawUrl);
             int status = parseStatus(reqMap.get("_flowtestMockStatus"));
             String body = toJsonString(mockResponse);
+            Object requestBody = extractRequestBodyExample(reqMap);
 
             server.stubFor(request(method, urlEqualTo(path))
                     .willReturn(aResponse()
@@ -217,6 +221,7 @@ public class ScenarioEngine {
                     "method", method,
                     "url", path,
                     "status", status,
+                    "requestBody", requestBody == null ? Map.of() : requestBody,
                     "responseBody", mockResponse
             ));
         }
@@ -238,6 +243,7 @@ public class ScenarioEngine {
                 url = "/";
             }
             String normalizedUrl = normalizePath(url);
+            Object requestBody = extractRequestBodyExample(reqMap);
 
             Map<String, Object> resMap = asMap(mock.get("response"));
             int status = parseStatus(resMap == null ? mock.get("status") : resMap.get("status"));
@@ -273,6 +279,7 @@ public class ScenarioEngine {
                     "method", method,
                     "url", normalizedUrl,
                     "status", status,
+                    "requestBody", requestBody == null ? Map.of() : requestBody,
                     "responseBody", bodyValue == null ? Map.of() : bodyValue
             ));
         }
@@ -336,34 +343,73 @@ public class ScenarioEngine {
             List<Map<String, Object>> mappings
     ) {
         Map<String, Object> paths = new LinkedHashMap<>();
-        int opIndex = 1;
+        int[] opIndex = {1};
+        Map<String, Integer> requestExampleCounter = new LinkedHashMap<>();
+        Map<String, Integer> responseExampleCounter = new LinkedHashMap<>();
         for (Map<String, Object> mapping : mappings) {
             String method = String.valueOf(mapping.getOrDefault("method", "GET")).toLowerCase();
             String url = String.valueOf(mapping.getOrDefault("url", "/"));
             String normalizedPath = normalizePath(url);
             int status = parseStatus(mapping.get("status"));
+            Object requestBody = mapping.get("requestBody");
             Object responseBody = mapping.get("responseBody");
 
             @SuppressWarnings("unchecked")
             Map<String, Object> pathItem = (Map<String, Object>) paths.computeIfAbsent(normalizedPath, k -> new LinkedHashMap<>());
-            Map<String, Object> operation = new LinkedHashMap<>();
-            operation.put("operationId", "wiremockOp" + (opIndex++));
-            operation.put("summary", method.toUpperCase() + " " + normalizedPath);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> operation = (Map<String, Object>) pathItem.computeIfAbsent(method, k -> {
+                Map<String, Object> op = new LinkedHashMap<>();
+                op.put("operationId", "wiremockOp" + (opIndex[0]++));
+                op.put("summary", method.toUpperCase() + " " + normalizedPath);
+                op.put("responses", new LinkedHashMap<String, Object>());
+                return op;
+            });
 
-            Map<String, Object> responses = new LinkedHashMap<>();
-            Map<String, Object> response = new LinkedHashMap<>();
-            response.put("description", "Mock response from WireMock stub");
+            if (supportsRequestBody(method)) {
+                Map<String, Object> requestBodyNode = new LinkedHashMap<>();
+                requestBodyNode.put("required", false);
+                Map<String, Object> requestContent = new LinkedHashMap<>();
+                Map<String, Object> requestMedia = new LinkedHashMap<>();
+                String reqKey = method + "#" + normalizedPath;
+                int reqIndex = requestExampleCounter.getOrDefault(reqKey, 0) + 1;
+                requestExampleCounter.put(reqKey, reqIndex);
+                putOpenApiExample(requestMedia, maybeJson(requestBody), "requestExample" + reqIndex);
+                requestContent.put("application/json", requestMedia);
+                requestBodyNode.put("content", requestContent);
+                if (!operation.containsKey("requestBody")) {
+                    operation.put("requestBody", requestBodyNode);
+                } else {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingRequestBody = (Map<String, Object>) operation.get("requestBody");
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingContent = (Map<String, Object>) existingRequestBody.computeIfAbsent("content", k -> new LinkedHashMap<>());
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingMedia = (Map<String, Object>) existingContent.computeIfAbsent("application/json", k -> new LinkedHashMap<>());
+                    putOpenApiExample(existingMedia, maybeJson(requestBody), "requestExample" + reqIndex);
+                }
+            }
 
-            Map<String, Object> media = new LinkedHashMap<>();
-            Map<String, Object> appJson = new LinkedHashMap<>();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responses = (Map<String, Object>) operation.computeIfAbsent("responses", k -> new LinkedHashMap<>());
+            String statusKey = String.valueOf(status);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = (Map<String, Object>) responses.computeIfAbsent(statusKey, k -> {
+                Map<String, Object> r = new LinkedHashMap<>();
+                r.put("description", "Mock response from WireMock stub");
+                Map<String, Object> content = new LinkedHashMap<>();
+                content.put("application/json", new LinkedHashMap<String, Object>());
+                r.put("content", content);
+                return r;
+            });
+            @SuppressWarnings("unchecked")
+            Map<String, Object> content = (Map<String, Object>) response.computeIfAbsent("content", k -> new LinkedHashMap<>());
+            @SuppressWarnings("unchecked")
+            Map<String, Object> appJson = (Map<String, Object>) content.computeIfAbsent("application/json", k -> new LinkedHashMap<>());
+            String respKey = method + "#" + normalizedPath + "#" + statusKey;
+            int respIndex = responseExampleCounter.getOrDefault(respKey, 0) + 1;
+            responseExampleCounter.put(respKey, respIndex);
             Object example = maybeJson(responseBody);
-            appJson.put("example", example);
-            media.put("application/json", appJson);
-            response.put("content", media);
-            responses.put(String.valueOf(status), response);
-
-            operation.put("responses", responses);
-            pathItem.put(method, operation);
+            putOpenApiExample(appJson, example, "responseExample" + respIndex);
         }
 
         Map<String, Object> info = new LinkedHashMap<>();
@@ -381,6 +427,171 @@ public class ScenarioEngine {
         openapi.put("servers", List.of(server));
         openapi.put("paths", paths);
         return openapi;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void putOpenApiExample(Map<String, Object> mediaNode, Object example, String exampleKey) {
+        if (mediaNode == null) return;
+        Object candidate = example == null ? Map.of() : example;
+        if (!mediaNode.containsKey("example") && !mediaNode.containsKey("examples")) {
+            mediaNode.put("example", candidate);
+            return;
+        }
+        Map<String, Object> examples;
+        if (mediaNode.containsKey("examples") && mediaNode.get("examples") instanceof Map<?, ?> rawExamples) {
+            examples = (Map<String, Object>) rawExamples;
+        } else {
+            examples = new LinkedHashMap<>();
+            if (mediaNode.containsKey("example")) {
+                examples.put("example1", Map.of("value", mediaNode.get("example")));
+                mediaNode.remove("example");
+            }
+            mediaNode.put("examples", examples);
+        }
+        String key = (exampleKey == null || exampleKey.isBlank()) ? "example" + (examples.size() + 1) : exampleKey;
+        examples.put(key, Map.of("value", candidate));
+    }
+
+    private boolean supportsRequestBody(String method) {
+        if (method == null) return false;
+        String m = method.toUpperCase();
+        return !("GET".equals(m) || "HEAD".equals(m) || "OPTIONS".equals(m) || "TRACE".equals(m));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object extractRequestBodyExample(Map<String, Object> reqMap) {
+        if (reqMap == null || reqMap.isEmpty()) return null;
+        Object direct = firstNonNull(
+                reqMap.get("jsonBody"),
+                reqMap.get("body"),
+                reqMap.get("requestBody"),
+                reqMap.get("payload")
+        );
+        if (direct != null) {
+            return maybeJson(direct);
+        }
+        Object bodyPatterns = reqMap.get("bodyPatterns");
+        if (bodyPatterns instanceof List<?> patterns) {
+            for (Object p : patterns) {
+                if (!(p instanceof Map<?, ?> raw)) continue;
+                Map<String, Object> map = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (entry.getKey() != null) {
+                        map.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+                Object equalToJson = firstNonNull(map.get("equalToJson"), map.get("matchesJson"));
+                if (equalToJson != null) {
+                    return maybeJson(equalToJson);
+                }
+            }
+            Object generated = buildRequestBodyFromJsonPathPatterns(patterns);
+            if (generated != null) {
+                return generated;
+            }
+        }
+        return null;
+    }
+
+    private Object buildRequestBodyFromJsonPathPatterns(List<?> patterns) {
+        if (patterns == null || patterns.isEmpty()) return null;
+        Map<String, Object> root = new LinkedHashMap<>();
+        int added = 0;
+        for (Object p : patterns) {
+            if (!(p instanceof Map<?, ?> raw)) continue;
+            Object exprRaw = raw.get("matchesJsonPath");
+            if (!(exprRaw instanceof String expr)) continue;
+            String normalized = expr.trim();
+            if (normalized.isBlank() || !normalized.startsWith("$")) continue;
+            // strip predicate filters because they are match constraints, not payload structure
+            normalized = normalized.replaceAll("\\[\\?\\([^\\]]*\\)\\]", "");
+            if ("$".equals(normalized)) continue;
+            boolean applied = applyJsonPathSample(root, normalized);
+            if (applied) added++;
+        }
+        return added > 0 ? root : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean applyJsonPathSample(Map<String, Object> root, String path) {
+        if (root == null || path == null || path.isBlank()) return false;
+        String working = path.startsWith("$.") ? path.substring(2) : path.startsWith("$") ? path.substring(1) : path;
+        if (working.isBlank()) return false;
+
+        List<String> tokens = new ArrayList<>();
+        Matcher m = Pattern.compile("([A-Za-z0-9_\\-]+)|\\[(\\d+)\\]").matcher(working);
+        while (m.find()) {
+            if (m.group(1) != null) tokens.add(m.group(1));
+            else if (m.group(2) != null) tokens.add("[" + m.group(2) + "]");
+        }
+        if (tokens.isEmpty()) return false;
+
+        Object node = root;
+        for (int i = 0; i < tokens.size(); i++) {
+            String tok = tokens.get(i);
+            boolean last = i == tokens.size() - 1;
+            String next = last ? null : tokens.get(i + 1);
+
+            if (tok.startsWith("[") && tok.endsWith("]")) {
+                int idx;
+                try {
+                    idx = Integer.parseInt(tok.substring(1, tok.length() - 1));
+                } catch (Exception e) {
+                    return false;
+                }
+                if (!(node instanceof List<?> listNode)) return false;
+                List<Object> list = (List<Object>) listNode;
+                while (list.size() <= idx) list.add(new LinkedHashMap<String, Object>());
+                if (last) {
+                    if (list.get(idx) == null || list.get(idx) instanceof Map) {
+                        list.set(idx, "sample");
+                    }
+                    return true;
+                }
+                Object child = list.get(idx);
+                if (next != null && next.startsWith("[")) {
+                    if (!(child instanceof List<?>)) {
+                        child = new ArrayList<>();
+                        list.set(idx, child);
+                    }
+                } else {
+                    if (!(child instanceof Map<?, ?>)) {
+                        child = new LinkedHashMap<String, Object>();
+                        list.set(idx, child);
+                    }
+                }
+                node = child;
+            } else {
+                if (!(node instanceof Map<?, ?> mapNode)) return false;
+                Map<String, Object> map = (Map<String, Object>) mapNode;
+                if (last) {
+                    map.putIfAbsent(tok, "sample");
+                    return true;
+                }
+                Object child = map.get(tok);
+                if (next != null && next.startsWith("[")) {
+                    if (!(child instanceof List<?>)) {
+                        child = new ArrayList<>();
+                        map.put(tok, child);
+                    }
+                } else {
+                    if (!(child instanceof Map<?, ?>)) {
+                        child = new LinkedHashMap<String, Object>();
+                        map.put(tok, child);
+                    }
+                }
+                node = child;
+            }
+        }
+        return false;
+    }
+
+    private Object firstNonNull(Object... values) {
+        if (values == null) return null;
+        for (Object value : values) {
+            if (value != null) return value;
+        }
+        return null;
     }
 
     private Object maybeJson(Object value) {
@@ -465,6 +676,70 @@ public class ScenarioEngine {
             }
         }
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enrichWireMockSnapshotWithRuntimeRequests(ScenarioRunResult result) {
+        try {
+            if (result == null || result.getWireMock() == null || !result.getWireMock().isEnabled()) return;
+            Map<String, Object> snapshot = this.lastWireMockSnapshot;
+            if (snapshot == null || !Boolean.TRUE.equals(snapshot.get("enabled"))) return;
+
+            Object mappingsObj = snapshot.get("mappings");
+            if (!(mappingsObj instanceof List<?> rawMappings) || rawMappings.isEmpty()) return;
+
+            List<Map<String, Object>> mappings = new ArrayList<>();
+            for (Object item : rawMappings) {
+                if (item instanceof Map<?, ?> m) {
+                    Map<String, Object> copy = new LinkedHashMap<>();
+                    for (Map.Entry<?, ?> e : m.entrySet()) {
+                        if (e.getKey() != null) copy.put(String.valueOf(e.getKey()), e.getValue());
+                    }
+                    mappings.add(copy);
+                }
+            }
+            if (mappings.isEmpty()) return;
+
+            for (StepRunResult step : result.getSteps()) {
+                if (step == null) continue;
+                if (!"api-call".equals(step.getStepType()) && !"api-assert".equals(step.getStepType())) continue;
+                if (!(step.getOutput() instanceof Map<?, ?> rawOut)) continue;
+
+                Map<String, Object> out = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> e : rawOut.entrySet()) {
+                    if (e.getKey() != null) out.put(String.valueOf(e.getKey()), e.getValue());
+                }
+
+                String method = String.valueOf(out.getOrDefault("method", "")).toUpperCase();
+                String url = normalizePath(String.valueOf(out.getOrDefault("url", "/")));
+                Object runtimeRequestBody = maybeJson(out.get("requestBody"));
+                if (runtimeRequestBody == null || (runtimeRequestBody instanceof Map<?, ?> rb && rb.isEmpty())) continue;
+
+                for (Map<String, Object> mapping : mappings) {
+                    String mMethod = String.valueOf(mapping.getOrDefault("method", "")).toUpperCase();
+                    String mUrl = normalizePath(String.valueOf(mapping.getOrDefault("url", "/")));
+                    if (!method.equals(mMethod) || !url.equals(mUrl)) continue;
+
+                    Object existing = mapping.get("requestBody");
+                    boolean shouldSet = existing == null
+                            || (existing instanceof Map<?, ?> em && em.isEmpty())
+                            || (existing instanceof String es && es.isBlank());
+                    if (shouldSet) {
+                        mapping.put("requestBody", runtimeRequestBody);
+                    }
+                }
+            }
+
+            String scenarioId = String.valueOf(snapshot.getOrDefault("scenarioId", result.getScenarioId() == null ? "" : result.getScenarioId()));
+            String baseUrl = String.valueOf(snapshot.getOrDefault("baseUrl", result.getWireMock().getBaseUrl() == null ? "" : result.getWireMock().getBaseUrl()));
+            Map<String, Object> updated = new LinkedHashMap<>(snapshot);
+            updated.put("mappings", mappings);
+            updated.put("openapi", buildOpenApiFromMappings(scenarioId, baseUrl, mappings));
+            updated.put("generatedAt", Instant.now().toString());
+            this.lastWireMockSnapshot = updated;
+        } catch (Exception ignored) {
+            // best-effort enrichment
+        }
     }
 
     private int parseStatus(Object value) {

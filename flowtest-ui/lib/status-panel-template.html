@@ -118,7 +118,9 @@
       padding: 8px;
       background: color-mix(in srgb, var(--card) 90%, #1f252d);
       box-shadow: 0 8px 20px rgba(0,0,0,0.24);
-      min-width: min(760px, calc(100vw - 32px));
+      width: calc((100vw - 32px) * 0.7);
+      max-width: calc(100vw - 32px);
+      min-width: 0;
       transition: opacity 280ms ease, transform 320ms cubic-bezier(0.22, 1, 0.36, 1), max-width 320ms ease;
       transform-origin: center bottom;
       pointer-events: none;
@@ -211,7 +213,7 @@
     }
     .runMetaDockGrid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 7px;
     }
     .runMetaDockItem {
@@ -250,6 +252,7 @@
       line-height: 1.35;
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 7px;
       min-width: 0;
     }
@@ -264,6 +267,9 @@
       overflow-wrap: anywhere;
     }
     .runMetaDockVal a:hover { text-decoration: underline; }
+    @media (max-width: 1200px) {
+      .runMetaDockGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
     @media (max-width: 860px) {
       .runFooterDock .stats { grid-template-columns: 1fr; }
       .runMetaDockGrid { grid-template-columns: 1fr; }
@@ -752,7 +758,7 @@
         <div class="sectionHeadRight">
           <span id="statusLabel" class="statusLabel"></span>
           <span id="lastRowLabel" class="lastRowLabel"></span>
-          <button id="fakeRunBtn" class="testBtn" type="button" style="font-size:9px;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid var(--border);background:color-mix(in srgb, var(--card) 84%, transparent);color:var(--muted);">Fake</button>
+          <button id="fakeRunBtn" class="testBtn" type="button" style="display:none;font-size:9px;padding:2px 8px;border-radius:999px;cursor:pointer;border:1px solid var(--border);background:color-mix(in srgb, var(--card) 84%, transparent);color:var(--muted);">Fake</button>
           <label class="followToggle"><input id="followLogs" type="checkbox" checked /> Follow logs</label>
         </div>
       </div>
@@ -900,6 +906,12 @@
       /* --- Timer helpers --- */
       var aiTimers = new Map();
       function mmss(sec) { var m = Math.floor(sec / 60); var s = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s; }
+      function durationMsToMmss(ms) {
+        var n = Number(ms);
+        if (!Number.isFinite(n) || n <= 0) return '';
+        var sec = Math.max(1, Math.ceil(n / 1000));
+        return mmss(sec);
+      }
       function stageKey(ev) { return (ev.stage || ''); }
       function startTimer(key, node) {
         if (aiTimers.has(key)) stopTimer(key);
@@ -917,11 +929,12 @@
         var entry = aiTimers.get(key);
         if (!entry) return '';
         clearInterval(entry.iv);
-        var elapsed = Math.round((Date.now() - entry.start) / 1000);
+        var elapsed = Math.max(1, Math.ceil((Date.now() - entry.start) / 1000));
         var finalTime = mmss(elapsed);
-        var lbl = entry.pill.querySelector('.timerLbl');
-        if (lbl) lbl.textContent = finalTime;
-        entry.pill.classList.add('done');
+        if (entry.pill) {
+          entry.pill.classList.add('hidden');
+          entry.pill.classList.remove('done');
+        }
         aiTimers.delete(key);
         return finalTime;
       }
@@ -1555,26 +1568,31 @@
           + '<span class="stageTag ' + sc + '">' + esc(ev.stage || '') + '</span>'
           + '<span class="statusPill ' + sm.cls + '">' + sm.text + '</span>'
           + '<span class="controlChip ' + cm.cls + '">' + cm.text + '</span>'
-          + '<span class="timerPill hidden" id="tp_' + detailId + '"><span class="timerDot"></span><span class="timerLbl">00:00</span></span>'
           + '<span class="titleWrap"><span class="title">' + esc(ev.title || '') + '</span>'
-          + expandBtnHtml + '</span></div>'
+          + expandBtnHtml + '</span>'
+          + '<span class="timerPill hidden" id="tp_' + detailId + '"><span class="timerDot"></span><span class="timerLbl">00:00</span></span></div>'
           + (hasBody ? '<div class="eventBody">' + (ev.detail ? '<div class="detail">' + esc(ev.detail) + '</div>' : '') + metaHtml + actionsHtml + '</div>' : '') + '</div>';
         timeline.appendChild(row);
+        var rowExpandBtn = row.querySelector('.expandBtn');
+        if (rowExpandBtn) rowExpandBtn.classList.toggle('is-collapsed', row.classList.contains('compact'));
         /* Timer logic — LLM + Java: start on FIRST running event, stop on completed */
         var tKey = stageKey(ev);
         var tPill = row.querySelector('.timerPill');
         var st = String(ev.status || '').toLowerCase();
         var isTimerStage = cm.cls === 'llm' || cm.cls === 'java';
         var isStart = st === 'in_progress' || st === 'running';
-        var isEnd = st === 'completed' || st === 'success' || st === 'done';
+        var isEnd = st === 'completed' || st === 'success' || st === 'done' || st === 'error' || st === 'failed' || st === 'fail' || st === 'warn' || st === 'warning' || st === 'cancelled' || st === 'canceled' || st === 'skipped';
+        var metaDur = ev && ev.meta ? (ev.meta.duration_ms ?? ev.meta.durationMs) : null;
+        var metaTime = durationMsToMmss(metaDur);
         if (isTimerStage && isStart && !aiTimers.has(tKey)) {
           if (tPill) startTimer(tKey, tPill);
         } else if (isTimerStage && isEnd) {
           var finalTime = stopTimer(tKey);
-          if (tPill && finalTime) {
+          var shownTime = metaTime || finalTime;
+          if (tPill && shownTime) {
             tPill.classList.remove('hidden');
             tPill.classList.add('done');
-            var tLbl = tPill.querySelector('.timerLbl'); if (tLbl) tLbl.textContent = finalTime;
+            var tLbl = tPill.querySelector('.timerLbl'); if (tLbl) tLbl.textContent = shownTime;
           }
         }
         /* Update lastRowLabel */
@@ -1654,7 +1672,10 @@
         const expandBtn = event.target && event.target.closest ? event.target.closest('.expandBtn') : null;
         if (expandBtn) {
           const row = expandBtn.closest('.event');
-          if (row) row.classList.toggle('compact');
+          if (row) {
+            row.classList.toggle('compact');
+            expandBtn.classList.toggle('is-collapsed', row.classList.contains('compact'));
+          }
           return;
         }
         const actionBtn = event.target && event.target.closest ? event.target.closest('.actionBtn') : null;
@@ -1817,7 +1838,7 @@
           if (intakeMode) intakeMode.textContent = String(p.intakeMode || '-');
           /* Hide Fake button during real runs */
           var fb = document.getElementById('fakeRunBtn');
-          if (fb) fb.style.display = 'none';
+          if (fb) fb.style.display = (p && p.allowFake) ? '' : 'none';
           if (lastRowLabel) lastRowLabel.textContent = '';
         } else if (msg.type === 'temporal') {
           const p = msg.payload || {};

@@ -14,6 +14,33 @@ const DEFAULT_ALLURE_REPORT_DIR = path.resolve(process.cwd(), "../flowtest-paren
 const OPENAPI_CACHE_DIR = path.resolve(process.cwd(), ".flowtest-cache");
 const OPENAPI_CACHE_FILE = path.resolve(OPENAPI_CACHE_DIR, "openapi-latest.json");
 
+function getProvider(): "openai" | "lmstudio" {
+  const provider = String(process.env.FLOWTEST_LLM_PROVIDER ?? "openai").toLowerCase();
+  return provider === "lmstudio" ? "lmstudio" : "openai";
+}
+
+function getModel(provider: "openai" | "lmstudio"): string {
+  if (provider === "lmstudio") return String(process.env.LMSTUDIO_MODEL ?? "local-model");
+  return String(process.env.OPENAI_MODEL ?? "gpt-5.4-mini");
+}
+
+function normalizeEventPayload(input: any): any {
+  const stage = String(input?.stage ?? "");
+  const status = String(input?.status ?? "");
+  const title = String(input?.title ?? "");
+  const detail = String(input?.detail ?? "");
+  const baseMeta = { stage, status, title };
+  if (detail) (baseMeta as any).detail = detail;
+  return {
+    ...input,
+    stage,
+    status,
+    title,
+    detail: input?.detail,
+    meta: { ...baseMeta, ...(input?.meta || {}) }
+  };
+}
+
 function stripJsonFences(raw: string): string {
   const text = String(raw || "").trim();
   const match = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -135,7 +162,8 @@ export async function POST(req: Request) {
     start(controller) {
       const enc = new TextEncoder();
       const send = (obj: unknown) => controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
-      const sendEvent = (payload: any) => send({ type: "event", payload: { time: hhmmss(new Date()), ...payload } });
+      const sendEvent = (payload: any) =>
+        send({ type: "event", payload: { time: hhmmss(new Date()), ...normalizeEventPayload(payload) } });
       const sendSummary = (status: string, detail: string) => send({ type: "summary", payload: { status, detail } });
       const sendMeta = (payload: any) => send({ type: "meta", payload });
 
@@ -148,6 +176,11 @@ export async function POST(req: Request) {
           const mode = payload?.multiUpload ? "multi upload" : "row mode";
           const orchestrationId = crypto.randomUUID();
           const temporalBase = "http://localhost:8233/namespaces/default/workflows";
+          const provider = getProvider();
+          const model = getModel(provider);
+          const llmEndpoint = provider === "lmstudio"
+            ? String(process.env.LMSTUDIO_CHAT_URL ?? "http://localhost:1234/v1/chat/completions")
+            : String(process.env.OPENAI_CHAT_URL ?? "https://api.openai.com/v1/chat/completions");
 
           send({
             type: "init",
@@ -158,39 +191,78 @@ export async function POST(req: Request) {
               successCount,
               failureCount,
               intakeMode: mode,
-              allowFake: true
+              allowFake: false
             }
           });
           sendSummary("Running", "Executing FlowTest chain...");
-          sendEvent({ stage: "RUN", status: "running", title: "Started" });
-          sendEvent({ stage: "UI", status: "info", title: "Status Panel Initialized" });
-          sendEvent({ stage: "Intake", status: "running", title: "Received" });
+          sendEvent({ stage: "RUN", status: "running", title: "Started", meta: { run_name: runName, orchestration_id: orchestrationId, intake_mode: mode } });
+          sendEvent({ stage: "UI", status: "info", title: "Status Panel Initialized", meta: { renderer: "nextjs-webview", theme: "vscode-ported", follow_logs_default: true } });
+          sendEvent({
+            stage: "Intake",
+            status: "running",
+            title: "Received",
+            meta: {
+              run_name: runName,
+              output_path: outputPath,
+              intake_mode: mode,
+              success_samples: successCount,
+              failure_samples: failureCount
+            }
+          });
           const docs = [
             ...(Array.isArray(payload?.successSamples) ? payload.successSamples : []),
             ...(Array.isArray(payload?.failureSamples) ? payload.failureSamples : []),
             ...(payload?.aid ? [payload.aid] : []),
             ...(payload?.hld ? [payload.hld] : [])
           ];
-          for (const doc of docs) {
+          for (let i = 0; i < docs.length; i++) {
+            const doc = docs[i] as any;
             const fileName = String((doc as any)?.fileName || (doc as any)?.title || "untitled");
-            sendEvent({ stage: "Intake", status: "info", title: "Doc Loaded", detail: fileName });
+            const content = String(doc?.content || "");
+            sendEvent({
+              stage: "Intake",
+              status: "info",
+              title: "Doc Loaded",
+              detail: fileName,
+              meta: {
+                doc_index: i + 1,
+                doc_total: docs.length,
+                doc_id: String(doc?.id || "-"),
+                doc_type: String(doc?.type || "DOC"),
+                file_name: fileName,
+                file_path: fileName,
+                file_size_chars: content.length,
+                file_size_bytes_utf8: Buffer.byteLength(content, "utf8")
+              }
+            });
           }
-          sendEvent({ stage: "Intake", status: "info", title: "Normalized" });
-          sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Generating API spec..." });
-          sendEvent({ stage: "API Spec", status: "running", title: "Started" });
+          sendEvent({ stage: "Intake", status: "info", title: "Normalized", meta: { docs_total: docs.length, normalized_docs: docs.length } });
+          sendSummary("Running", "Generating API Spec...");
+          sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Generating API spec...", meta: { next_stage: "API Spec", provider, model } });
+          sendEvent({
+            stage: "API Spec",
+            status: "running",
+            title: "Started",
+            meta: { provider, model, llm_endpoint: llmEndpoint, task: "GENERATE_API_SPEC" }
+          });
 
           const chain = await runIntakePromptChain(payload!, async (ev) => {
+            if (ev.title === "Ai Request Dispatched") {
+              return;
+            }
             sendEvent(ev);
             if (ev.stage === "API Spec" && ev.title === "Ai Response Received") {
               sendEvent({ stage: "UI", status: "info", title: "Api Spec Section Rendered" });
               sendEvent({ stage: "API Spec", status: "success", title: "Completed" });
-              sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Generating WireMock definitions..." });
-              sendEvent({ stage: "WireMock", status: "running", title: "Started" });
+              sendSummary("Running", "Generating WireMock...");
+              sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Generating WireMock definitions...", meta: { next_stage: "WireMock", provider, model } });
+              sendEvent({ stage: "WireMock", status: "running", title: "Started", meta: { provider, model, llm_endpoint: llmEndpoint, task: "GENERATE_MOCKS" } });
             } else if (ev.stage === "WireMock" && ev.title === "Ai Response Received") {
               sendEvent({ stage: "UI", status: "info", title: "Wiremock Section Rendered" });
               sendEvent({ stage: "WireMock", status: "success", title: "Completed" });
-              sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Generating FlowTest scenario DSL..." });
-              sendEvent({ stage: "Scenario DSL", status: "running", title: "Started" });
+              sendSummary("Running", "Generating Scenario DSL...");
+              sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Generating FlowTest scenario DSL...", meta: { next_stage: "Scenario DSL", provider, model } });
+              sendEvent({ stage: "Scenario DSL", status: "running", title: "Started", meta: { provider, model, llm_endpoint: llmEndpoint, task: "GENERATE_SCENARIO" } });
             } else if (ev.stage === "Scenario DSL" && ev.title === "Ai Response Received") {
               sendEvent({ stage: "UI", status: "info", title: "Scenario Section Rendered" });
               sendEvent({ stage: "Scenario DSL", status: "success", title: "Completed" });
@@ -216,16 +288,21 @@ export async function POST(req: Request) {
           const preflightError = String(chain.parsed.preflightError ?? "").trim();
           const canRunEngine = !!chain.parsed.scenarioJson && !preflightError && !!chain.parsed.mockCoverageOk;
 
-          sendEvent({ stage: "Scenario DSL", status: chain.parsed.scenarioJson ? "success" : "error", title: chain.parsed.scenarioJson ? "Json Parse Ok" : "Json Parse Failed" });
           sendEvent({
-            stage: "WireMock",
-            status: canRunEngine ? "success" : "warn",
-            title: canRunEngine ? "Coverage Check" : "Mocks Parse Empty",
-            detail: `wiremock_mocks=${Number(chain.parsed.wiremockMockCount ?? 0)} | attached_mocks=${Number(chain.parsed.attachedMockCount ?? 0)} | coverage_ok=${Boolean(chain.parsed.mockCoverageOk)}`
+            stage: "Scenario DSL",
+            status: chain.parsed.scenarioJson ? "success" : "error",
+            title: chain.parsed.scenarioJson ? "Json Parse Ok" : "Json Parse Failed",
+            meta: { scenario_json_ok: !!chain.parsed.scenarioJson, preflight_error: preflightError || "-", attached_mocks: Number(chain.parsed.attachedMockCount ?? 0) }
           });
-          sendEvent({ stage: "Scenario DSL", status: chain.parsed.scenarioJson ? "success" : "error", title: "Engine Shape Validated" });
-          sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Running FlowTest engine validation..." });
-          sendEvent({ stage: "Engine Run", status: "running", title: "Started" });
+          sendEvent({
+            stage: "Scenario DSL",
+            status: chain.parsed.scenarioJson ? "success" : "error",
+            title: "Engine Shape Validated",
+            meta: { can_run_engine: canRunEngine, mock_coverage_ok: !!chain.parsed.mockCoverageOk, wiremock_mock_count: Number(chain.parsed.wiremockMockCount ?? 0) }
+          });
+          sendSummary("Running", "Running Engine...");
+          sendEvent({ stage: "UI", status: "info", title: "Progress", detail: "Running FlowTest engine validation...", meta: { next_stage: "Engine Run" } });
+          sendEvent({ stage: "Engine Run", status: "running", title: "Started", meta: { engine_url: `${ENGINE_BASE_URL}/api/scenarios/run-temporal`, method: "POST", can_run_engine: canRunEngine } });
 
           if (!canRunEngine) {
             engine = { ok: false, skipped: true, reason: preflightError || "Scenario preflight failed before engine run", status: 0, body: "" };
@@ -252,12 +329,30 @@ export async function POST(req: Request) {
             if (workflowId) {
               const temporalLink = `${temporalBase}/${workflowId}${runId ? `/${runId}` : ""}`;
               send({ type: "temporal", payload: { temporalLink } });
-              sendEvent({ stage: "Engine Run", status: "running", title: "Temporal Workflow Started", detail: temporalLink });
+              sendEvent({
+                stage: "Engine Run",
+                status: "running",
+                title: "Temporal Workflow Started",
+                detail: temporalLink,
+                meta: { temporal_link: temporalLink, workflow_id: workflowId, run_id: runId || "-" }
+              });
             }
 
-            sendEvent({ stage: "Engine Run", status: upstream.ok ? "running" : "error", title: "Response Received", detail: `http_status=${upstream.status}` });
+            sendEvent({
+              stage: "Engine Run",
+              status: upstream.ok ? "running" : "error",
+              title: "Response Received",
+              detail: `http_status=${upstream.status}`,
+              meta: {
+                http_status: upstream.status,
+                workflow_id: workflowId || "-",
+                run_id: runId || "-",
+                response_chars: body.length
+              }
+            });
 
             if (meta.generateCommand && meta.resultsPath && meta.reportDir) {
+              sendSummary("Running", "Generating Allure Report...");
               try {
                 const cmd = `allure generate "${meta.resultsPath}" -o "${meta.reportDir}" --clean`;
                 await exec(cmd);
@@ -284,14 +379,51 @@ export async function POST(req: Request) {
                   startError: started.error ?? null,
                   preClean
                 };
-                sendEvent({ stage: "ALLURE", status: readyState.ready ? "success" : "warn", title: readyState.ready ? "Server Ready" : "Server Not Reachable", detail: allureUrl });
+                sendSummary("Running", "Allure in progress...");
+                sendEvent({
+                  stage: "ALLURE",
+                  status: readyState.ready ? "success" : "warn",
+                  title: readyState.ready ? "Server Ready" : "Server Not Reachable",
+                  detail: allureUrl,
+                  meta: {
+                    allure_url: allureUrl,
+                    report_path: meta.reportPath ?? "-",
+                    report_dir: meta.reportDir ?? "-",
+                    command: cmd,
+                    server_started: started.started,
+                    server_ready: readyState.ready,
+                    ready_wait_ms: readyState.elapsedMs,
+                    ready_timeout_ms: Number.isFinite(ALLURE_READY_TIMEOUT_MS) ? Math.max(1000, ALLURE_READY_TIMEOUT_MS) : 120000
+                  }
+                });
               } catch (error: any) {
                 allure = { ok: false, command: meta.generateCommand, error: String(error?.message ?? error), reportPath: meta.reportPath ?? null, reportDir: meta.reportDir ?? null, preClean };
-                sendEvent({ stage: "ALLURE", status: "warn", title: "Generate Failed", detail: allure.error });
+                sendEvent({
+                  stage: "ALLURE",
+                  status: "warn",
+                  title: "Generate Failed",
+                  detail: allure.error,
+                  meta: {
+                    command: String(meta.generateCommand ?? "-"),
+                    report_path: String(meta.reportPath ?? "-"),
+                    report_dir: String(meta.reportDir ?? "-"),
+                    error_message: String(allure.error ?? "-")
+                  }
+                });
               }
             } else {
               allure = { ok: false, skipped: true, error: "Allure metadata missing from engine response" };
-              sendEvent({ stage: "ALLURE", status: "warn", title: "Generate Failed", detail: allure.error });
+              sendEvent({
+                stage: "ALLURE",
+                status: "warn",
+                title: "Generate Failed",
+                detail: allure.error,
+                meta: {
+                  skipped: true,
+                  error_message: String(allure.error ?? "-"),
+                  wiremock_base_url: String(meta.wiremockBaseUrl ?? "-")
+                }
+              });
             }
 
             chain.parsed = {
@@ -344,7 +476,18 @@ export async function POST(req: Request) {
 
           const finalOk = !preflightError && !!engine?.ok && !engine?.skipped;
           sendSummary(finalOk ? "Completed" : "Failed", finalOk ? "Engine scenarios: 1/1 passed" : (preflightError || "Engine scenarios failed"));
-          sendEvent({ stage: "RUN", status: finalOk ? "success" : "error", title: finalOk ? "Completed" : "Failed" });
+          sendEvent({
+            stage: "RUN",
+            status: finalOk ? "success" : "error",
+            title: finalOk ? "Completed" : "Failed",
+            meta: {
+              run_name: runName,
+              orchestration_id: orchestrationId,
+              engine_ok: finalOk,
+              preflight_error: preflightError || "-",
+              wiremock_base_url: String(chain.parsed.wiremockBaseUrl || "-")
+            }
+          });
           send({ type: "final", payload: response });
           controller.close();
         } catch (error: any) {

@@ -56,6 +56,7 @@ public class ApiCallStepExecutor implements StepExecutor {
             String method = String.valueOf(request.get("method"));
             String rawUrl = String.valueOf(request.get("url"));
             String url = resolveUrl(rawUrl, context);
+            Object requestBody = extractRequestBodyExample(request);
 
             boolean wiremockEnabled = Boolean.TRUE.equals(context.get(CONTEXT_WIREMOCK_ENABLED));
             Object mockResponse = request.get("_flowtestMockResponse");
@@ -65,6 +66,7 @@ public class ApiCallStepExecutor implements StepExecutor {
                 output.put("mode", "inline-mock-fallback");
                 output.put("method", method);
                 output.put("url", url);
+                output.put("requestBody", requestBody == null ? Map.of() : requestBody);
                 output.put("status", parseStatus(request.get("_flowtestMockStatus")));
                 output.put("responseBody", responseBody);
                 context.putStepOutput(step.getId(), output);
@@ -73,8 +75,12 @@ public class ApiCallStepExecutor implements StepExecutor {
                 return result;
             }
 
-            ResponseEntity<String> response = restClient.method(HttpMethod.valueOf(method))
-                    .uri(url)
+            var requestSpec = restClient.method(HttpMethod.valueOf(method))
+                    .uri(url);
+            if (supportsRequestBody(method) && requestBody != null) {
+                requestSpec.body(requestBody);
+            }
+            ResponseEntity<String> response = requestSpec
                     .retrieve()
                     .toEntity(String.class);
 
@@ -82,6 +88,7 @@ public class ApiCallStepExecutor implements StepExecutor {
             output.put("mode", wiremockEnabled ? "wiremock" : "live-api");
             output.put("method", method);
             output.put("url", url);
+            output.put("requestBody", requestBody == null ? Map.of() : requestBody);
             output.put("status", response.getStatusCode().value());
             output.put("responseBody", response.getBody() == null ? "" : response.getBody());
 
@@ -93,6 +100,14 @@ public class ApiCallStepExecutor implements StepExecutor {
             result.setSuccess(false);
             result.setErrorMessage(re.getMessage());
             Map<String, Object> output = new LinkedHashMap<>();
+            Map<String, Object> request = step.getRequest() == null ? Map.of() : step.getRequest();
+            String method = String.valueOf(request.getOrDefault("method", ""));
+            String rawUrl = String.valueOf(request.getOrDefault("url", ""));
+            String url = resolveUrl(rawUrl, context);
+            Object requestBody = extractRequestBodyExample(request);
+            output.put("method", method);
+            output.put("url", url);
+            output.put("requestBody", requestBody == null ? Map.of() : requestBody);
             output.put("status", re.getStatusCode() == null ? 0 : re.getStatusCode().value());
             output.put("responseBody", re.getResponseBodyAsString());
             output.put("headers", re.getResponseHeaders() == null ? Map.of() : re.getResponseHeaders().toSingleValueMap());
@@ -139,5 +154,64 @@ public class ApiCallStepExecutor implements StepExecutor {
         } catch (Exception ignored) {
             return String.valueOf(payload);
         }
+    }
+
+    private boolean supportsRequestBody(String method) {
+        if (method == null) return false;
+        String m = method.toUpperCase();
+        return !("GET".equals(m) || "HEAD".equals(m) || "OPTIONS".equals(m) || "TRACE".equals(m));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object extractRequestBodyExample(Map<String, Object> reqMap) {
+        if (reqMap == null || reqMap.isEmpty()) return null;
+        Object direct = firstNonNull(
+                reqMap.get("jsonBody"),
+                reqMap.get("body"),
+                reqMap.get("requestBody"),
+                reqMap.get("payload")
+        );
+        if (direct != null) {
+            return maybeJson(direct);
+        }
+        Object bodyPatterns = reqMap.get("bodyPatterns");
+        if (bodyPatterns instanceof java.util.List<?> patterns) {
+            for (Object p : patterns) {
+                if (!(p instanceof Map<?, ?> raw)) continue;
+                Map<String, Object> map = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (entry.getKey() != null) {
+                        map.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+                Object equalToJson = firstNonNull(map.get("equalToJson"), map.get("matchesJson"));
+                if (equalToJson != null) return maybeJson(equalToJson);
+            }
+        }
+        return null;
+    }
+
+    private Object firstNonNull(Object... values) {
+        if (values == null) return null;
+        for (Object value : values) {
+            if (value != null) return value;
+        }
+        return null;
+    }
+
+    private Object maybeJson(Object value) {
+        if (value == null) return Map.of();
+        if (value instanceof String s) {
+            String t = s.trim();
+            if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
+                try {
+                    return objectMapper.readValue(t, Object.class);
+                } catch (Exception ignored) {
+                    return s;
+                }
+            }
+            return s;
+        }
+        return value;
     }
 }
