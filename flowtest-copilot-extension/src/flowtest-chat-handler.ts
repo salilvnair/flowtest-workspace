@@ -317,9 +317,24 @@ function normalizeScenarioForEngine(input: Record<string, unknown>): {
       }
       mapped.request = reqCopy;
     }
+    if (Array.isArray((step as any).assertions)) {
+      mapped.assertions = ((step as any).assertions as Array<unknown>)
+        .filter((a) => !!a && typeof a === "object");
+    }
     const inputObj = (step as any).input;
     if (inputObj && typeof inputObj === "object") {
       mapped.input = inputObj;
+    }
+
+    if (stepType === "api-assert") {
+      const expected = (step as any).expectedResponse;
+      const expectedStatus = expected && typeof expected === "object"
+        ? (expected as any).status
+        : undefined;
+      const hasAssertions = Array.isArray((mapped as any).assertions) && ((mapped as any).assertions as Array<unknown>).length > 0;
+      if (!hasAssertions && expectedStatus !== undefined) {
+        mapped.assertions = [{ type: "status", expected: expectedStatus }];
+      }
     }
 
     if (stepType === "api-call" || stepType === "api-assert") {

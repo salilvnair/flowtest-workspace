@@ -591,6 +591,270 @@ function normalizeWiremockMocks(value: unknown): Array<Record<string, unknown>> 
   return out;
 }
 
+type BodyConstraint = {
+  path: string;
+  value?: unknown;
+  hasValue: boolean;
+  enforce: boolean;
+};
+
+type MockMatcher = {
+  method: string;
+  path: string;
+  status: number;
+  constraints: BodyConstraint[];
+};
+
+function readJsonPathValue(body: any, jsonPath: string): unknown {
+  const raw = String(jsonPath || "").trim();
+  const dotPath = raw.startsWith("$.") ? raw.slice(2) : raw.startsWith("$") ? raw.slice(1) : raw;
+  if (!dotPath) return undefined;
+  const segments = dotPath.split(".").map((s) => s.replace(/\[0\]/g, "")).filter(Boolean);
+  let cur = body;
+  for (const seg of segments) {
+    if (!cur || typeof cur !== "object") return undefined;
+    cur = (cur as any)[seg];
+  }
+  return cur;
+}
+
+function isSimpleJsonPath(jsonPath: string): boolean {
+  const p = String(jsonPath || "").trim();
+  if (!p) return false;
+  if (!p.startsWith("$.")) return false;
+  if (p.includes("[?(") || p.includes("@.") || p.includes("==") || p.includes("!=")) return false;
+  return /^(\$\.[A-Za-z_][A-Za-z0-9_]*(\[[0-9]+\])?)(\.[A-Za-z_][A-Za-z0-9_]*(\[[0-9]+\])?)*$/.test(p);
+}
+
+function writeJsonPathValue(body: Record<string, unknown>, jsonPath: string, value: unknown): void {
+  const raw = String(jsonPath || "").trim();
+  const dotPath = raw.startsWith("$.") ? raw.slice(2) : raw.startsWith("$") ? raw.slice(1) : raw;
+  if (!dotPath) return;
+  const segments = dotPath.split(".").map((s) => s.replace(/\[0\]/g, "")).filter(Boolean);
+  if (segments.length === 0) return;
+  let cur: any = body;
+  for (let i = 0; i < segments.length - 1; i++) {
+    const seg = segments[i];
+    if (!cur[seg] || typeof cur[seg] !== "object" || Array.isArray(cur[seg])) cur[seg] = {};
+    cur = cur[seg];
+  }
+  cur[segments[segments.length - 1]] = value;
+}
+
+function extractConstraintsFromPattern(pattern: Record<string, unknown>): BodyConstraint[] {
+  const out: BodyConstraint[] = [];
+  const matchPath = String((pattern as any).matchesJsonPath || "").trim();
+  if (matchPath) {
+    const enforce = isSimpleJsonPath(matchPath);
+    if ((pattern as any).equalTo !== undefined) {
+      out.push({ path: matchPath, value: (pattern as any).equalTo, hasValue: true, enforce });
+    } else {
+      out.push({ path: matchPath, hasValue: false, enforce });
+    }
+  }
+
+  const rawEqJson = (pattern as any).equalToJson;
+  let eqJson: any = null;
+  if (rawEqJson && typeof rawEqJson === "object") eqJson = rawEqJson;
+  if (typeof rawEqJson === "string") {
+    try {
+      eqJson = JSON.parse(rawEqJson);
+    } catch {
+      eqJson = null;
+    }
+  }
+  if (eqJson && typeof eqJson === "object" && !Array.isArray(eqJson)) {
+    for (const [k, v] of Object.entries(eqJson)) {
+      if (typeof v === "string" && v.includes("${json-unit.any-string}")) continue;
+      out.push({ path: `$.${k}`, value: v, hasValue: true, enforce: true });
+    }
+  }
+  return out;
+}
+
+function buildMockMatchers(mocks: Array<Record<string, unknown>>): MockMatcher[] {
+  const out: MockMatcher[] = [];
+  for (const m of mocks) {
+    const req = (m as any).request;
+    const res = (m as any).response;
+    if (!req || typeof req !== "object" || !res || typeof res !== "object") continue;
+    const method = normalizeMethod((req as any).method);
+    const path = normalizePath(
+      (req as any).urlPath ??
+      (req as any).url ??
+      (req as any).urlPathPattern ??
+      (req as any).urlPattern ??
+      "/"
+    );
+    const status = Number((res as any).status ?? 200);
+    const bodyPatterns = Array.isArray((req as any).bodyPatterns) ? ((req as any).bodyPatterns as Array<any>) : [];
+    const constraints: BodyConstraint[] = [];
+    for (const p of bodyPatterns) {
+      if (!p || typeof p !== "object") continue;
+      constraints.push(...extractConstraintsFromPattern(p as Record<string, unknown>));
+    }
+    out.push({ method, path, status: Number.isFinite(status) ? status : 200, constraints });
+  }
+  return out;
+}
+
+function isFailureLikeByStatus(status: number): boolean {
+  return Number.isFinite(status) && status >= 400;
+}
+
+function scenarioPrefersFailure(scenario: Record<string, unknown>): boolean {
+  return isFailureScenario(scenario) && !isSuccessScenario(scenario);
+}
+
+function matchConstraints(body: unknown, constraints: BodyConstraint[]): boolean {
+  const enforced = constraints.filter((c) => c.enforce);
+  if (!enforced.length) return true;
+  if (!body || typeof body !== "object") return false;
+  for (const c of enforced) {
+    const got = readJsonPathValue(body as any, c.path);
+    if (c.hasValue) {
+      if (got !== c.value) return false;
+    } else if (got === undefined) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function chooseMatcherForStep(
+  candidates: MockMatcher[],
+  scenario: Record<string, unknown>,
+  req: Record<string, unknown>
+): MockMatcher | null {
+  if (candidates.length === 0) return null;
+  const expectedRaw = String((req as any).expectedStatus ?? "").toLowerCase();
+  if (expectedRaw.includes("4xx")) {
+    const list = candidates.filter((c) => isFailureLikeByStatus(c.status));
+    if (list.length > 0) return list[0];
+  }
+  if (expectedRaw.includes("2xx")) {
+    const list = candidates.filter((c) => !isFailureLikeByStatus(c.status));
+    if (list.length > 0) return list[0];
+  }
+  if (scenarioPrefersFailure(scenario)) {
+    const list = candidates.filter((c) => isFailureLikeByStatus(c.status));
+    if (list.length > 0) return list[0];
+  }
+  const success = candidates.filter((c) => !isFailureLikeByStatus(c.status));
+  return (success[0] || candidates[0]) ?? null;
+}
+
+function cloneJson<T>(v: T): T {
+  try {
+    return JSON.parse(JSON.stringify(v));
+  } catch {
+    return v;
+  }
+}
+
+function filterCandidatesForScenario(
+  candidates: MockMatcher[],
+  scenario: Record<string, unknown>,
+  req: Record<string, unknown>
+): MockMatcher[] {
+  const expectedRaw = String((req as any).expectedStatus ?? "").toLowerCase();
+  if (expectedRaw.includes("4xx")) {
+    const list = candidates.filter((c) => isFailureLikeByStatus(c.status));
+    if (list.length > 0) return list;
+  }
+  if (expectedRaw.includes("2xx")) {
+    const list = candidates.filter((c) => !isFailureLikeByStatus(c.status));
+    if (list.length > 0) return list;
+  }
+  if (scenarioPrefersFailure(scenario)) {
+    const list = candidates.filter((c) => isFailureLikeByStatus(c.status));
+    if (list.length > 0) return list;
+  }
+  const success = candidates.filter((c) => !isFailureLikeByStatus(c.status));
+  return success.length > 0 ? success : candidates;
+}
+
+function repairStepAgainstWiremockMatcher(
+  scenario: Record<string, unknown>,
+  req: Record<string, unknown>,
+  matchers: MockMatcher[]
+): { repaired: number; compatible: boolean; reason?: string } {
+  const method = normalizeMethod((req as any).method);
+  const path = normalizePath((req as any).url || "/");
+  const candidates = matchers.filter((m) => m.method === method && m.path === path);
+  if (candidates.length === 0) return { repaired: 0, compatible: true };
+  const expectedRaw = String((req as any).expectedStatus ?? (req as any).expectedStatusCode ?? "").trim().toLowerCase();
+  const expectedNum = Number(expectedRaw);
+  const expectSuccess = expectedRaw.includes("2xx") || (Number.isFinite(expectedNum) && expectedNum > 0 && expectedNum < 400);
+  const expectFailure = expectedRaw.includes("4xx") || expectedRaw.includes("5xx") || (Number.isFinite(expectedNum) && expectedNum >= 400);
+  const successCandidates = candidates.filter((m) => !isFailureLikeByStatus(m.status));
+  const failureCandidates = candidates.filter((m) => isFailureLikeByStatus(m.status));
+  if (expectSuccess && successCandidates.length === 0) {
+    return { repaired: 0, compatible: false, reason: "expected success (2xx) but no success matcher exists for this endpoint" };
+  }
+  if (expectFailure && failureCandidates.length === 0) {
+    return { repaired: 0, compatible: false, reason: "expected failure (4xx/5xx) but no failure matcher exists for this endpoint" };
+  }
+  const pool = filterCandidatesForScenario(candidates, scenario, req);
+  if (pool.length === 0) {
+    return { repaired: 0, compatible: false, reason: "no matcher candidates available after status-intent filtering" };
+  }
+
+  let body = readRequestBodyFromReq(req);
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    body = {};
+    writeRequestBodyToReq(req, body);
+  }
+  const obj = body as Record<string, unknown>;
+
+  for (const c of pool) {
+    if (matchConstraints(obj, c.constraints)) return { repaired: 0, compatible: true };
+  }
+
+  let best: { body: Record<string, unknown>; repaired: number; constraints: BodyConstraint[] } | null = null;
+  for (const cand of pool) {
+    const draft = cloneJson(obj);
+    let repaired = 0;
+    for (const c of cand.constraints) {
+      if (!c.enforce) continue;
+      const got = readJsonPathValue(draft, c.path);
+      if (c.hasValue) {
+        if (got === c.value) continue;
+        // Force-align discriminator/body matcher values to stub contract.
+        writeJsonPathValue(draft, c.path, c.value);
+        repaired++;
+        continue;
+      }
+      // For required presence-only constraints, inject a safe placeholder.
+      if (got === undefined) {
+        writeJsonPathValue(draft, c.path, "sample");
+        repaired++;
+      }
+    }
+    if (matchConstraints(draft, cand.constraints)) {
+      if (!best || repaired < best.repaired) best = { body: draft, repaired, constraints: cand.constraints };
+    }
+  }
+
+  if (best) {
+    writeRequestBodyToReq(req, best.body);
+    return { repaired: best.repaired, compatible: true };
+  }
+
+  const chosen = chooseMatcherForStep(pool, scenario, req) || pool[0];
+  if (!chosen) return { repaired: 0, compatible: true };
+  const enforced = chosen.constraints.filter((c) => c.enforce);
+  if (enforced.length === 0) return { repaired: 0, compatible: true };
+
+  const unmet: string[] = [];
+  for (const c of enforced) {
+    const got = readJsonPathValue(obj, c.path);
+    if (c.hasValue && got !== c.value) unmet.push(`${c.path}=${String(c.value)}`);
+    if (!c.hasValue && got === undefined) unmet.push(`${c.path} (required)`);
+  }
+  return { repaired: 0, compatible: false, reason: `unmet matcher constraints: ${unmet.join(", ")}` };
+}
+
 function preferSuccessMappings(mocks: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   const statusOf = (m: Record<string, unknown>): number => {
     const response = m?.response;
@@ -776,14 +1040,18 @@ function ensureJsonHeader(req: Record<string, unknown>): boolean {
 
 function sanitizeScenarioSteps(
   scenario: Record<string, unknown>,
-  apiSamples: Map<string, unknown>
-): { repairedBodies: number; addedHeaders: number; addedExpectedStatuses: number } {
+  apiSamples: Map<string, unknown>,
+  mockMatchers: MockMatcher[]
+): { repairedBodies: number; addedHeaders: number; addedExpectedStatuses: number; matcherRepairs: number; matcherErrors: string[] } {
   const steps = Array.isArray((scenario as any).steps) ? ((scenario as any).steps as Array<any>) : [];
   const failLike = isFailureScenario(scenario);
   const seenBodies = new Map<string, unknown>();
   let repairedBodies = 0;
   let addedHeaders = 0;
   let addedExpectedStatuses = 0;
+  let matcherRepairs = 0;
+  const matcherErrors: string[] = [];
+  const sid = String((scenario as any).scenarioId || "unknown-scenario");
 
   for (const step of steps) {
     if (!step || typeof step !== "object") continue;
@@ -821,10 +1089,16 @@ function sanitizeScenarioSteps(
       (req as any).expectedStatus = failLike ? "4xx" : "2xx";
       addedExpectedStatuses++;
     }
+
+    const matcherFix = repairStepAgainstWiremockMatcher(scenario, req, mockMatchers);
+    matcherRepairs += matcherFix.repaired;
+    if (!matcherFix.compatible) {
+      matcherErrors.push(`${sid} ${type} ${method} ${path}: ${String(matcherFix.reason || "matcher not compatible")}`);
+    }
   }
 
   repairedBodies += repairApiAssertStepsInScenario(scenario);
-  return { repairedBodies, addedHeaders, addedExpectedStatuses };
+  return { repairedBodies, addedHeaders, addedExpectedStatuses, matcherRepairs, matcherErrors };
 }
 
 export async function runIntakePromptChain(
@@ -1274,26 +1548,135 @@ export async function runIntakePromptChain(
   } else {
     const apiSpecParsed = extractJsonValue(apiSpec.responseText);
     const apiRequestSamples = buildApiRequestSamples(apiSpecParsed);
+    const mockMatchers = buildMockMatchers(effectiveMocks);
     let repairedBodies = 0;
     let addedHeaders = 0;
     let addedExpectedStatuses = 0;
-    for (const sc of scenariosJson) {
-      const fixed = sanitizeScenarioSteps(sc, apiRequestSamples);
-      repairedBodies += fixed.repairedBodies;
-      addedHeaders += fixed.addedHeaders;
-      addedExpectedStatuses += fixed.addedExpectedStatuses;
+    let matcherRepairs = 0;
+    let matcherErrorsAll: string[] = [];
+
+    const runSanitizerPass = () => {
+      repairedBodies = 0;
+      addedHeaders = 0;
+      addedExpectedStatuses = 0;
+      matcherRepairs = 0;
+      matcherErrorsAll = [];
+      for (const sc of scenariosJson) {
+        const fixed = sanitizeScenarioSteps(sc, apiRequestSamples, mockMatchers);
+        repairedBodies += fixed.repairedBodies;
+        addedHeaders += fixed.addedHeaders;
+        addedExpectedStatuses += fixed.addedExpectedStatuses;
+        matcherRepairs += fixed.matcherRepairs;
+        matcherErrorsAll.push(...fixed.matcherErrors);
+      }
+    };
+
+    runSanitizerPass();
+
+    const maxMatcherRetries = 2;
+    for (let attempt = 1; attempt <= maxMatcherRetries && matcherErrorsAll.length > 0; attempt++) {
+      const retryPrompt =
+        [
+          "You generated FlowTest scenarios that failed WireMock matcher compatibility.",
+          "Fix ONLY scenario request bodies/steps so they match the wiremock request matchers exactly.",
+          "Return JSON only in suite format:",
+          '{ "dslVersion":"1.0", "flowName":"...", "scenarios":[ ... ] }',
+          "",
+          "WHAT YOU DID WRONG:",
+          ...matcherErrorsAll.slice(0, 50),
+          "",
+          "WHAT WE NEED NOW (STRICT):",
+          "1) For every api-call/api-assert step, request.method and request.url must match API + wiremock endpoint.",
+          "2) request.requestBody must include all matcher discriminator fields required by wiremock bodyPatterns.",
+          "3) If wiremock expects exact value, scenario must use that exact value.",
+          "4) Ensure api-assert requestBody is not empty and is compatible with selected matcher.",
+          "5) Keep scenario intent (success/failure) but prioritize compatibility correctness.",
+          "6) Do not include markdown or backticks.",
+          "",
+          "API SPEC:",
+          String(apiSpec.responseText || ""),
+          "",
+          "WIREMOCK MAPPINGS:",
+          String(wiremock.responseText || ""),
+          "",
+          "CURRENT SCENARIOS TO FIX:",
+          JSON.stringify({ dslVersion: "1.0", flowName: String(intake.runName || "flowtest"), scenarios: scenariosJson }, null, 2)
+        ].join("\n");
+
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "warn",
+        title: "Matcher Retry",
+        detail: `attempt=${attempt}/${maxMatcherRetries} fixing ${matcherErrorsAll.length} compatibility issue(s)`,
+        meta: {
+          attempt,
+          max_attempts: maxMatcherRetries,
+          matcher_errors: matcherErrorsAll.length
+        },
+        actions: [buildDispatchAction("GENERATE_SCENARIO", retryPrompt)]
+      });
+
+      const retry = await executeAiTaskDetailed("GENERATE_SCENARIO", retryPrompt, {
+        timeoutMs: llmTimeoutMs,
+        maxRetries: llmMaxRetries
+      });
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "info",
+        title: "Matcher Retry Response",
+        detail: `${String(retry.responseText || "").length} chars`,
+        meta: {
+          provider: retry.provider,
+          model: retry.model,
+          called_at: retry.calledAt,
+          completed_at: retry.completedAt,
+          duration_ms: retry.durationMs
+        },
+        actions: [
+          { label: "AI Request", title: `Matcher Retry ${attempt} - AI Request`, content: JSON.stringify(retry.requestPayload, null, 2) },
+          { label: "AI Response", title: `Matcher Retry ${attempt} - AI Response`, content: String(retry.responseText || "") }
+        ]
+      });
+
+      const retryScenarios = normalizeScenarioSuite(extractJsonValue(retry.responseText));
+      if (retryScenarios.length === 0) break;
+      scenariosJson = retryScenarios;
+      scenarioJson = scenariosJson[0] || null;
+      runSanitizerPass();
     }
+
     await onProgress?.({
       stage: "Scenario DSL",
       status: "info",
       title: "Step Sanitizer",
-      detail: `repaired_bodies=${repairedBodies} added_headers=${addedHeaders} added_expected_status=${addedExpectedStatuses}`,
+      detail: `repaired_bodies=${repairedBodies} added_headers=${addedHeaders} added_expected_status=${addedExpectedStatuses} matcher_repairs=${matcherRepairs}`,
       meta: {
         repaired_bodies: repairedBodies,
         added_headers: addedHeaders,
-        added_expected_status: addedExpectedStatuses
+        added_expected_status: addedExpectedStatuses,
+        matcher_repairs: matcherRepairs,
+        matcher_errors: matcherErrorsAll.length
       }
     });
+    if (matcherErrorsAll.length > 0) {
+      preflightError = `Scenario/WireMock compatibility failed for ${matcherErrorsAll.length} step(s).`;
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "error",
+        title: "Matcher Compatibility Failed",
+        detail: preflightError,
+        meta: {
+          matcher_errors: matcherErrorsAll.length
+        },
+        actions: [
+          {
+            label: "Compatibility Errors",
+            title: "Scenario to WireMock Matcher Compatibility Errors",
+            content: JSON.stringify(matcherErrorsAll, null, 2)
+          }
+        ]
+      });
+    }
 
     const coverageIssuesText = (c: ReturnType<typeof computeApiCoverageMatrix>): string => {
       const issues: string[] = [];
@@ -1326,6 +1709,18 @@ export async function runIntakePromptChain(
           out_of_range_count: coverage.outOfRange.length
         }
       });
+      const coverageRetryStart = Date.now();
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "running",
+        title: "Coverage Retry In Progress",
+        detail: `attempt=${attempt}/${maxCoverageRetries} waiting for LLM response`,
+        meta: {
+          attempt,
+          max_attempts: maxCoverageRetries,
+          started_at: new Date(coverageRetryStart).toISOString()
+        }
+      });
 
       const retryPrompt =
         [
@@ -1350,6 +1745,25 @@ export async function runIntakePromptChain(
       const retry = await executeAiTaskDetailed("GENERATE_SCENARIO", retryPrompt, {
         timeoutMs: llmTimeoutMs,
         maxRetries: llmMaxRetries
+      });
+      const coverageRetryDurationMs = Date.now() - coverageRetryStart;
+      await onProgress?.({
+        stage: "Scenario DSL",
+        status: "success",
+        title: "Coverage Retry Completed",
+        detail: `attempt=${attempt}/${maxCoverageRetries} duration=${Math.max(1, Math.round(coverageRetryDurationMs / 100) / 10)}s`,
+        meta: {
+          attempt,
+          max_attempts: maxCoverageRetries,
+          provider: retry.provider,
+          model: retry.model,
+          duration_ms: coverageRetryDurationMs,
+          response_chars: String(retry.responseText || "").length
+        },
+        actions: [
+          { label: "AI Request", title: `Coverage Retry ${attempt} - AI Request`, content: JSON.stringify(retry.requestPayload, null, 2) },
+          { label: "AI Response", title: `Coverage Retry ${attempt} - AI Response`, content: String(retry.responseText || "") }
+        ]
       });
       const retryScenarios = normalizeScenarioSuite(extractJsonValue(retry.responseText));
       if (retryScenarios.length > 0) {

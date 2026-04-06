@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import path from "node:path";
 import { readFile } from "node:fs/promises";
+import { loadLatestRequestExamples } from "@/lib/openapi-request-examples";
 
 const ENGINE_BASE_URL = process.env.FLOWTEST_ENGINE_BASE_URL ?? "http://localhost:8080";
 const OPENAPI_CACHE_FILE = path.resolve(process.cwd(), ".flowtest-cache/openapi-latest.json");
@@ -28,6 +29,15 @@ function pickStatus(node: any, fallback: number): string {
   return String(Number(node?.httpStatus ?? node?.statusCode ?? fallback));
 }
 
+function toExampleKey(input: string, fallback: string): string {
+  const key = String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return key || fallback;
+}
+
 function normalizeResponses(api: any): Array<any> {
   if (Array.isArray(api?.responses)) {
     return api.responses.filter((r: any) => r && typeof r === "object");
@@ -43,7 +53,27 @@ function normalizeResponses(api: any): Array<any> {
   return out;
 }
 
-function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
+function isPlaceholderSample(value: any): boolean {
+  if (typeof value === "string") return value.trim().toLowerCase() === "sample";
+  if (Array.isArray(value)) return value.length > 0 && value.every((v) => isPlaceholderSample(v));
+  if (value && typeof value === "object") {
+    const vals = Object.values(value);
+    return vals.length > 0 && vals.every((v) => isPlaceholderSample(v));
+  }
+  return false;
+}
+
+function hasUsefulExamples(examples: any): boolean {
+  if (!examples || typeof examples !== "object") return false;
+  const vals = Object.values(examples);
+  if (vals.length === 0) return false;
+  return vals.some((entry: any) => {
+    const candidate = entry && typeof entry === "object" && "value" in entry ? (entry as any).value : entry;
+    return candidate !== undefined && !isPlaceholderSample(candidate);
+  });
+}
+
+function toOpenApiIfNeeded(raw: JsonMap | null, requestExamplesByEndpoint: Map<string, Array<{ summary: string; value: any }>>): JsonMap | null {
   if (!raw || typeof raw !== "object") return null;
   if (raw.openapi && raw.paths && typeof raw.paths === "object") return raw;
   if (!Array.isArray(raw.apis)) return raw;
@@ -74,26 +104,53 @@ function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
       content: {
         "application/json": {
           ...(successSchema ? { schema: successSchema } : {}),
-          ...(successExample ? { example: successExample } : {})
+          ...(successExample ? {
+            examples: {
+              [toExampleKey(successNode?.name || "success_1", "success_1")]: {
+                summary: "success_1",
+                value: successExample
+              }
+            }
+          } : {})
         }
       }
     };
 
+    const failureCountByStatus: Record<string, number> = {};
     for (let i = 0; i < failureNodes.length; i++) {
       const f = failureNodes[i] || {};
       const code = pickStatus(f, 400);
       const bodySchema = f.body && typeof f.body === "object" ? f.body : undefined;
       const example = f.sample ?? f.example ?? (bodySchema ? sampleFromSchema(bodySchema) : undefined);
+      const current = responses[code]?.content?.["application/json"] || {};
       if (!responses[code]) {
         responses[code] = {
           description: String(f.name || f.errorCode || "Failure response"),
           content: {
             "application/json": {
-              ...(bodySchema ? { schema: bodySchema } : {}),
-              ...(example ? { example } : {})
+              ...(bodySchema ? { schema: bodySchema } : {})
             }
           }
         };
+      }
+      if (bodySchema && !responses[code].content["application/json"]?.schema) {
+        responses[code].content["application/json"].schema = bodySchema;
+      }
+      if (example !== undefined) {
+        failureCountByStatus[code] = (failureCountByStatus[code] || 0) + 1;
+        const idx = failureCountByStatus[code];
+        const variant = toExampleKey(f.name || f.errorCode || `failure_${idx}`, `failure_${idx}`);
+        const exMap = (current.examples && typeof current.examples === "object") ? current.examples : {};
+        const key = exMap[variant] ? `${variant}_${idx}` : variant;
+        responses[code].content["application/json"].examples = {
+          ...exMap,
+          [key]: { summary: key, value: example }
+        };
+        if (!responses[code].content["application/json"].examples || Object.keys(responses[code].content["application/json"].examples).length === 0) {
+          responses[code].content["application/json"].example = example;
+        } else {
+          delete responses[code].content["application/json"].example;
+        }
       }
     }
 
@@ -135,13 +192,34 @@ function toOpenApiIfNeeded(raw: JsonMap | null): JsonMap | null {
       description: String(api.purpose || ""),
       responses
     };
+    const endpointKey = `${method.toUpperCase()} ${pathKey}`;
+    const runtimeRequestExamples = requestExamplesByEndpoint.get(endpointKey) || [];
+    const requestExamples: JsonMap = {};
+    const usedRequestKeys = new Set<string>();
+    for (let i = 0; i < runtimeRequestExamples.length; i++) {
+      const ex = runtimeRequestExamples[i];
+      const base = toExampleKey(ex.summary, `request_${i + 1}`);
+      let key = base;
+      let n = 2;
+      while (usedRequestKeys.has(key)) {
+        key = `${base}_${n++}`;
+      }
+      usedRequestKeys.add(key);
+      requestExamples[key] = {
+        summary: ex.summary,
+        value: ex.value
+      };
+    }
+    const hasExamples = Object.keys(requestExamples).length > 0;
+    const requestExample = runtimeRequestExamples[0]?.value ?? (requestSchema ? sampleFromSchema(requestSchema) : undefined);
     if (requestSchema) {
       operation.requestBody = {
         required: true,
         content: {
           "application/json": {
             schema: requestSchema,
-            example: sampleFromSchema(requestSchema)
+            ...(hasExamples ? { examples: requestExamples } : {}),
+            ...(!hasExamples && requestExample ? { example: requestExample } : {})
           }
         }
       };
@@ -165,7 +243,10 @@ async function readGeneratedApiSpec(): Promise<JsonMap | null> {
   try {
     const raw = await readFile(OPENAPI_CACHE_FILE, "utf-8");
     const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return toOpenApiIfNeeded(parsed as JsonMap);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const requestExamplesByEndpoint = await loadLatestRequestExamples();
+      return toOpenApiIfNeeded(parsed as JsonMap, requestExamplesByEndpoint);
+    }
   } catch {
     // ignore when generated spec is unavailable
   }
@@ -180,13 +261,24 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
   const mergeMedia = (runMedia: any, genMedia: any): any => {
     const r = runMedia && typeof runMedia === "object" ? runMedia : {};
     const g = genMedia && typeof genMedia === "object" ? genMedia : {};
-    return {
+    const runExamplesUseful = hasUsefulExamples(r.examples);
+    const genExamplesUseful = hasUsefulExamples(g.examples);
+    const resolvedExamples = runExamplesUseful ? r.examples : (genExamplesUseful ? g.examples : (r.examples || g.examples));
+    const resolvedExample = !isPlaceholderSample(r.example)
+      ? r.example
+      : (!isPlaceholderSample(g.example) ? g.example : (g.example ?? r.example));
+    const merged: any = {
       ...g,
       ...r,
       schema: r.schema || g.schema,
-      example: r.example || g.example,
-      examples: (r.examples && Object.keys(r.examples).length > 0) ? r.examples : g.examples
+      examples: resolvedExamples
     };
+    if (!resolvedExamples || Object.keys(resolvedExamples).length === 0) {
+      merged.example = resolvedExample;
+    } else if (merged.example !== undefined) {
+      delete merged.example;
+    }
+    return merged;
   };
 
   const mergeRequestBody = (runReqRaw: any, genReqRaw: any): any => {
@@ -278,19 +370,37 @@ function mergeOpenApi(runtimeSpec: JsonMap, generatedSpec: JsonMap | null): Json
 
 export async function GET() {
   try {
+    const generatedSpec = await readGeneratedApiSpec();
     const res = await fetch(`${ENGINE_BASE_URL.replace(/\/+$/, "")}/api/scenarios/wiremock/openapi`, {
       method: "GET",
       cache: "no-store"
     });
+    if (!res.ok) {
+      if (generatedSpec && generatedSpec.paths && typeof generatedSpec.paths === "object") {
+        return NextResponse.json(generatedSpec, { status: 200 });
+      }
+      return NextResponse.json(
+        { ok: false, error: "Runtime OpenAPI unavailable" },
+        { status: res.status }
+      );
+    }
     const text = await res.text();
     const runtimeSpec = JSON.parse(text);
-    const generatedSpec = await readGeneratedApiSpec();
+    const runtimeHasPaths = runtimeSpec && typeof runtimeSpec === "object" && runtimeSpec.paths && typeof runtimeSpec.paths === "object";
+    if (!runtimeHasPaths && generatedSpec && generatedSpec.paths && typeof generatedSpec.paths === "object") {
+      return NextResponse.json(generatedSpec, { status: 200 });
+    }
     const merged = mergeOpenApi(runtimeSpec, generatedSpec);
-    return NextResponse.json(merged, { status: res.status });
+    return NextResponse.json(merged, { status: 200 });
   } catch (error: any) {
-    return NextResponse.json(
-      { ok: false, error: String(error?.message || error || "Failed to fetch runtime OpenAPI") },
-      { status: 500 }
-    );
+    try {
+      const generatedSpec = await readGeneratedApiSpec();
+      if (generatedSpec && generatedSpec.paths && typeof generatedSpec.paths === "object") {
+        return NextResponse.json(generatedSpec, { status: 200 });
+      }
+    } catch {
+      // fall through
+    }
+    return NextResponse.json({ ok: false, error: String(error?.message || error || "Failed to fetch runtime OpenAPI") }, { status: 500 });
   }
 }

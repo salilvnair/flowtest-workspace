@@ -25,6 +25,15 @@ function pickStatus(node: any, fallback: number): string {
   return String(Number(node?.httpStatus ?? node?.statusCode ?? fallback));
 }
 
+function toExampleKey(input: string, fallback: string): string {
+  const key = String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return key || fallback;
+}
+
 function normalizeResponses(api: any): Array<any> {
   if (Array.isArray(api?.responses)) {
     return api.responses.filter((r: any) => r && typeof r === "object");
@@ -56,6 +65,7 @@ function toOpenApiIfNeeded(raw: any): any {
       (api.request && typeof api.request === "object" ? api.request : undefined);
     const responseNodes = normalizeResponses(api);
     const responses: Record<string, any> = {};
+    const statusExampleCounter: Record<string, { success: number; failure: number }> = {};
 
     for (const node of responseNodes) {
       const status = pickStatus(node, 200);
@@ -63,16 +73,39 @@ function toOpenApiIfNeeded(raw: any): any {
       const example = node?.sample ?? node?.example ?? (bodySchema ? sampleFromSchema(bodySchema) : undefined);
       const statusNum = Number(status);
       const isFailure = statusNum >= 400;
-      if (responses[status]) continue;
-      responses[status] = {
-        description: String(node?.name || node?.errorCode || (isFailure ? "Failure response" : "Success response")),
-        content: {
-          "application/json": {
-            ...(bodySchema ? { schema: bodySchema } : {}),
-            ...(example ? { example } : {})
+      const media = responses[status]?.content?.["application/json"] || {};
+      if (!responses[status]) {
+        responses[status] = {
+          description: String(node?.name || node?.errorCode || (isFailure ? "Failure response" : "Success response")),
+          content: {
+            "application/json": {
+              ...(bodySchema ? { schema: bodySchema } : {})
+            }
           }
+        };
+      }
+      if (bodySchema && !responses[status].content["application/json"]?.schema) {
+        responses[status].content["application/json"].schema = bodySchema;
+      }
+      if (example !== undefined) {
+        const counter = statusExampleCounter[status] || { success: 0, failure: 0 };
+        if (isFailure) counter.failure += 1;
+        else counter.success += 1;
+        statusExampleCounter[status] = counter;
+        const variant = isFailure ? `failure_${counter.failure}` : `success_${counter.success}`;
+        const label = toExampleKey(node?.name || node?.errorCode || variant, variant);
+        const existing = (media.examples && typeof media.examples === "object") ? media.examples : {};
+        const withUniqueKey = existing[label] ? `${label}_${isFailure ? counter.failure : counter.success}` : label;
+        responses[status].content["application/json"].examples = {
+          ...existing,
+          [withUniqueKey]: { summary: withUniqueKey, value: example }
+        };
+        if (!responses[status].content["application/json"].examples || Object.keys(responses[status].content["application/json"].examples).length === 0) {
+          responses[status].content["application/json"].example = example;
+        } else {
+          delete responses[status].content["application/json"].example;
         }
-      };
+      }
     }
 
     if (!responses["200"]) {
@@ -92,13 +125,14 @@ function toOpenApiIfNeeded(raw: any): any {
       description: String(api.purpose || ""),
       responses
     };
+    const requestExample = requestSchema ? sampleFromSchema(requestSchema) : undefined;
     if (requestSchema) {
       op.requestBody = {
         required: true,
         content: {
           "application/json": {
             schema: requestSchema,
-            example: sampleFromSchema(requestSchema)
+            ...(requestExample ? { example: requestExample } : {})
           }
         }
       };

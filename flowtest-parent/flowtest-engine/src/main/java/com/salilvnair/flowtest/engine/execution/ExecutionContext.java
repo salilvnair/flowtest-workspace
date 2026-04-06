@@ -18,4 +18,9 @@ public class ExecutionContext {
     public void putStepOutput(String stepId, Object value) {
         stepOutputs.put(stepId, value);
     }
+
+    public Object getStepOutput(String stepId) {
+        if (stepId == null) return null;
+        return stepOutputs.get(stepId);
+    }
 }
